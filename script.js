@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // 🔴 URL DO WEBHOOK
     // ============================================================
-    const WEBHOOK_URL = "https://SEU-N8N-AQUI/webhook/vestibular-femaf"; 
+    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
     
     // CONFIGURAÇÕES
     const MIN_CHARS = 1000;
