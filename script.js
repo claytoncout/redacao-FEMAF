@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // ⚙️ CONFIGURAÇÕES GERAIS
     // ============================================================
-    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
+    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook/femaf"; 
     const SUPPORT_PHONE = "5599999999999"; // 🔴 SEU NUMERO DE SUPORTE (Para o link do WhatsApp)
     const SUPPORT_PHONE_VISUAL = "(99) 99999-9999"; 
     
