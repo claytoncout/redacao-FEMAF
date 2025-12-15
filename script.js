@@ -3,14 +3,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // ⚙️ CONFIGURAÇÕES GERAIS
     // ============================================================
-    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook/femaf"; 
-    const SUPPORT_PHONE = "5599999999999"; // 🔴 COLOQUE O NUMERO DA FEMAF AQUI (COM DDI 55 + DDD)
-    const SUPPORT_PHONE_VISUAL = "(99) 99999-9999"; // O que aparece escrito na tela
+    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
+    const SUPPORT_PHONE = "5599999999999"; // 🔴 SEU NUMERO DE SUPORTE (Para o link do WhatsApp)
+    const SUPPORT_PHONE_VISUAL = "(99) 99999-9999"; 
     
     const MIN_CHARS = 1000;
     const MAX_CHARS = 2000;
     const EXAM_DURATION_SEC = 3 * 60 * 60; // 3 Horas
-    const STORAGE_KEY = 'femaf_mvp_session_v6'; 
+    const STORAGE_KEY = 'femaf_mvp_session_v7'; // Versão atualizada
 
     // ============================================================
     // 🖥️ ELEMENTOS DO DOM
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSubmitting = false;
 
     // ============================================================
-    // 1. CHECAGEM DE SESSÃO
+    // 1. CHECAGEM DE SESSÃO (APENAS F5 DURANTE PROVA)
     // ============================================================
     checkSession();
 
@@ -50,28 +50,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = JSON.parse(raw);
         
-        if (data.status === 'finished' || data.status === 'blocked') {
-            forceBlockScreen("Prova já finalizada.");
-            return;
-        }
-
+        // Se a prova estava RODANDO e a página recarregou -> FRAUDE
         if (data.status === 'running') {
             handleFraud("Página recarregada (F5) durante a prova");
             return; 
         }
-    }
 
-    function forceBlockScreen(msg) {
-        alert(msg);
-        introOverlay.style.display = 'flex';
-        startBtn.disabled = true;
-        startBtn.innerText = "Acesso Bloqueado";
+        // Se estava bloqueado ou finalizado, limpamos a sessão local
+        // para permitir que ele tente logar de novo (e receba a msg do servidor se ainda estiver bloqueado)
+        if (data.status === 'finished' || data.status === 'blocked') {
+            localStorage.removeItem(STORAGE_KEY);
+        }
     }
 
     // ============================================================
-    // 2. LÓGICA DE LOGIN (INICIO-PROVA)
+    // 2. LÓGICA DE LOGIN (COM +55)
     // ============================================================
     
+    // Máscara Visual (O aluno vê (11) 9xxxx-xxxx)
     inpPhone.addEventListener('input', (e) => {
         let v = e.target.value.replace(/\D/g,"");
         v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
@@ -80,9 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startBtn.addEventListener('click', async () => {
         const name = inpName.value.trim();
-        const rawPhone = inpPhone.value.replace(/\D/g, ""); 
+        const rawPhone = inpPhone.value.replace(/\D/g, ""); // Apenas números: 11958009674
         const course = inpCourse.value;
 
+        // Validação local
         if (name.length < 3 || rawPhone.length < 10 || !course) {
             showLoginError("Preencha todos os campos corretamente.");
             return;
@@ -94,46 +91,51 @@ document.addEventListener('DOMContentLoaded', () => {
         startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Verificando...';
         errorMsg.classList.add('hidden');
 
+        // Formatação para o Webhook (+55 + DDD + Numero)
+        const internationalPhone = "+55" + rawPhone; 
+
         try {
+            // Envia para o n8n validar
             const response = await sendToWebhook({
                 acao: "inicio-prova",
                 nome: name,
-                telefone: rawPhone,
+                telefone: internationalPhone, // Envia: +5511958009674
                 curso: course
             });
 
-            // LÓGICA DE DECISÃO RÍGIDA
-            // Só passa se autorizado for EXPLICITAMENTE true
+            // Se o Webhook retornar { autorizado: true }
             if (response && response.autorizado === true) {
-                startExamSession(name, rawPhone, course);
+                // SUCESSO: Inicia a prova
+                startExamSession(name, internationalPhone, course);
             } else {
-                // Qualquer outra coisa (false, null, undefined, vazio) cai aqui
-                showContactSupportError();
+                // ERRO / BLOQUEIO: Mostra a mensagem vermelha, mas mantém na tela de login
+                const msgServer = response.mensagem || "Acesso bloqueado. Entre em contato com a secretaria.";
+                showContactSupportError(msgServer);
+                
+                // Libera o botão para tentar de novo (caso a secretaria desbloqueie)
                 startBtn.disabled = false;
                 startBtn.innerHTML = originalBtnText;
             }
 
         } catch (error) {
             console.error("Erro no fluxo:", error);
-            // Erro de rede ou servidor fora do ar também cai no suporte
-            showContactSupportError();
+            showLoginError("Erro de conexão. Verifique sua internet.");
             startBtn.disabled = false;
             startBtn.innerHTML = originalBtnText;
         }
     });
 
-    // Função específica para direcionar ao WhatsApp
-    function showContactSupportError() {
+    // Mostra erro com link do WhatsApp
+    function showContactSupportError(customMsg) {
         const msg = `
-            Houve um problema com seu processo seletivo.<br>
-            Entre em contato com a secretaria: 
-            <a href="https://wa.me/${SUPPORT_PHONE}?text=Ola,%20tive%20problema%20ao%20acessar%20a%20prova" 
+            ${customMsg}<br>
+            <a href="https://wa.me/${SUPPORT_PHONE}?text=Ola,%20estou%20bloqueado%20na%20prova" 
                target="_blank" 
-               style="color: var(--danger); font-weight: 800; text-decoration: underline;">
-               ${SUPPORT_PHONE_VISUAL}
+               style="color: var(--danger); font-weight: 800; text-decoration: underline; margin-top:5px; display:inline-block;">
+               Falar com Suporte
             </a>
         `;
-        errorMsg.innerHTML = `<i class="ph-bold ph-whatsapp-logo"></i> <span>${msg}</span>`;
+        errorMsg.innerHTML = `<div style="text-align:center"><i class="ph-bold ph-lock-key"></i> ${msg}</div>`;
         errorMsg.classList.remove('hidden');
     }
 
@@ -144,12 +146,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startExamSession(name, phone, course) {
         const deadline = Date.now() + (EXAM_DURATION_SEC * 1000);
+        
         const sessionData = { 
             active: true, 
             status: 'running', 
             name, phone, course, deadline 
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+        
         initializeExamInterface(sessionData);
     }
 
@@ -171,6 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function startTimer(seconds) {
         clearInterval(timerInterval);
         let timer = seconds;
+        
         timerInterval = setInterval(() => {
             if (timer <= 0) {
                 handleFraud("Tempo esgotado"); 
@@ -189,17 +194,21 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             handleFraud("Suspeita de colar (Paste)");
         });
+
         window.addEventListener('blur', () => {
             if (!isSubmitting && localStorage.getItem(STORAGE_KEY)) {
                 handleFraud("Saiu da tela (Aba minimizada)");
             }
         });
+        
         document.addEventListener('contextmenu', event => event.preventDefault());
     }
 
     function handleFraud(reason) {
         if (isSubmitting) return;
+
         const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        // Se já estiver bloqueado, não faz nada
         if (data && data.status === 'blocked') return;
 
         clearInterval(timerInterval);
@@ -210,9 +219,12 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
 
+        // Mostra modal de bloqueio
         mainContainer.classList.add('hidden-section');
         modalFraud.classList.remove('hidden');
         
+        // Envia motivo para o N8N
+        // OBS: Aqui usamos os dados do storage, que já tem o telefone com +55
         sendToWebhook({
             acao: "bloquear-aluno",
             observacoes: reason,
@@ -226,8 +238,9 @@ document.addEventListener('DOMContentLoaded', () => {
         charCounter.style.color = (len < MIN_CHARS || len > MAX_CHARS) ? '#ef4444' : '#16a34a';
     });
 
+
     // ============================================================
-    // 4. SUBMIT E ENVIO
+    // 4. SUBMIT FINAL
     // ============================================================
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -264,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalSuccess.classList.remove('hidden');
 
         } catch (error) {
-            alert("Erro de conexão. Se o problema persistir, tire print da redação e envie no WhatsApp.");
+            alert("Erro ao enviar. Verifique conexão.");
             submitBtn.disabled = false;
             isSubmitting = false;
         }
@@ -275,22 +288,38 @@ document.addEventListener('DOMContentLoaded', () => {
         modalError.classList.add('hidden');
     });
 
+    // ============================================================
+    // 📡 FUNÇÃO DE ENVIO CENTRALIZADA
+    // ============================================================
     async function sendToWebhook(payloadExtra) {
+        // Tenta pegar do storage ou usa os inputs
         const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        
+        // Se tiver no storage, já está com +55. Se pegar do input, precisa tratar.
+        let phoneToSend;
+        if (stored.phone) {
+            phoneToSend = stored.phone;
+        } else {
+            // Caso seja o primeiro envio (Login)
+            const rawInput = inpPhone.value.replace(/\D/g, "");
+            phoneToSend = "+55" + rawInput;
+        }
+
         const baseData = {
             nome: stored.name || inpName.value,
-            telefone: stored.phone || inpPhone.value.replace(/\D/g, ""),
+            telefone: phoneToSend,
             curso: stored.course || inpCourse.value,
             data_evento: new Date().toISOString()
         };
 
+        // Sobrescreve com o payload específico (ex: telefone do login que já vem tratado)
         const finalPayload = { ...baseData, ...payloadExtra };
         
         if (finalPayload.redacao) {
             finalPayload.caracteres = finalPayload.redacao.length;
         }
 
-        console.log("Enviando:", finalPayload);
+        console.log("Enviando JSON:", finalPayload);
 
         const response = await fetch(WEBHOOK_URL, {
             method: 'POST',
