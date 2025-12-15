@@ -9,9 +9,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="style.css">
-    
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -25,50 +25,64 @@
             </div>
 
             <div class="intro-content">
-                <h1>Acesso à Prova Online</h1>
-                <p>Insira seus dados exatamente como informado no WhatsApp.</p>
+                <header class="intro-text">
+                    <h1>Ambiente de Avaliação</h1>
+                    <p>Preencha seus dados corretamente para liberar o acesso à prova de redação.</p>
+                </header>
 
                 <div class="info-badges">
                     <div class="badge warning">
-                        <i class="ph-bold ph-clock"></i> <span>3h de Duração</span>
+                        <i class="ph-bold ph-clock"></i> <span>3 Horas</span>
                     </div>
                     <div class="badge info">
-                        <i class="ph-bold ph-text-aa"></i> <span>Min. 1000 carac.</span>
+                        <i class="ph-bold ph-text-aa"></i> <span>1000 a 2000 caracteres</span>
                     </div>
                 </div>
 
                 <div class="login-grid">
                     <div class="input-group">
-                        <label>Nome Completo</label>
+                        <label for="introName">Nome Completo</label>
                         <div class="input-box">
                             <i class="ph ph-user"></i>
-                            <input type="text" id="introName" placeholder="Seu nome completo" autocomplete="name">
+                            <input type="text" id="introName" placeholder="Digite seu nome completo" autocomplete="name">
                         </div>
                     </div>
 
                     <div class="input-group">
-                        <label>WhatsApp (com DDD)</label>
+                        <label for="introPhone">WhatsApp</label>
                         <div class="input-box">
                             <i class="ph ph-whatsapp-logo"></i>
-                            <input type="tel" id="introPhone" placeholder="(00) 00000-0000" maxlength="15">
+                            <input type="tel" id="introPhone" placeholder="(99) 99999-9999" maxlength="15">
                         </div>
                     </div>
 
                     <div class="input-group">
-                        <label>Curso Pretendido</label>
+                        <label for="introCourse">Curso Desejado</label>
                         <div class="input-box">
                             <i class="ph ph-books"></i>
-                            <input type="text" id="introCourse" placeholder="Ex: Direito, Enfermagem..." autocomplete="off">
+                            <select id="introCourse" class="custom-select">
+                                <option value="" disabled selected>Selecione uma opção...</option>
+                                <option value="Administração">Administração</option>
+                                <option value="Ciências Contábeis">Ciências Contábeis</option>
+                                <option value="Direito">Direito</option>
+                                <option value="Educação Física">Educação Física</option>
+                                <option value="Engenharia Civil">Engenharia Civil</option>
+                                <option value="Farmácia">Farmácia</option>
+                                <option value="Pedagogia">Pedagogia</option>
+                                <option value="Psicologia">Psicologia</option>
+                                <option value="Serviço Social">Serviço Social</option>
+                                <option value="Tecnólogo em Agronegócios">Tecnólogo em Agronegócios</option>
+                            </select>
                         </div>
                     </div>
                     
-                    <p id="loginError" class="error-toast hidden">
-                        <i class="ph-bold ph-warning-circle"></i> Preencha todos os campos.
-                    </p>
+                    <div id="loginError" class="error-toast hidden">
+                        <i class="ph-bold ph-warning-circle"></i> Por favor, preencha todos os campos.
+                    </div>
                 </div>
 
                 <button id="startExamBtn" class="btn-primary large">
-                    Iniciar Prova Agora <i class="ph-bold ph-arrow-right"></i>
+                    Iniciar Prova <i class="ph-bold ph-arrow-right"></i>
                 </button>
             </div>
         </div>
@@ -91,11 +105,7 @@
         <main class="exam-workspace">
             
             <form id="contactForm" class="workspace-grid">
-                <input type="hidden" name="name" id="realNameInput">
-                <input type="hidden" name="phone" id="realPhoneInput">
-                <input type="hidden" name="course" id="realCourseInput">
-                <input type="hidden" name="reason" id="closureReason" value="finalizado_pelo_aluno">
-
+                
                 <aside class="theme-panel">
                     
                     <div class="panel-card user-card">
@@ -110,7 +120,7 @@
                             </div>
                             
                             <div class="data-item">
-                                <span class="data-label">Curso</span>
+                                <span class="data-label">Curso Selecionado</span>
                                 <input type="text" id="sidebarCourse" class="clean-input" disabled value="...">
                             </div>
                         </div>
@@ -119,15 +129,17 @@
                     <div class="panel-card theme-card">
                         <div class="card-label"><i class="ph-bold ph-lightbulb"></i> Tema da Redação</div>
                         <h2 id="themeDisplay">Tema Livre</h2>
-                        <p id="themeSupportText">Escreva uma redação dissertativa-argumentativa sobre um tema de sua escolha que seja relevante para a sociedade atual.</p>
+                        <p id="themeSupportText">
+                            Escreva um texto dissertativo-argumentativo sobre um tema relevante para a sociedade brasileira contemporânea.
+                        </p>
                     </div>
                     
                     <div class="panel-card info-card">
-                        <div class="card-label"><i class="ph-bold ph-warning-octagon"></i> Regras Importantes</div>
+                        <div class="card-label"><i class="ph-bold ph-shield-warning"></i> Regras de Segurança</div>
                         <ul>
-                            <li><strong>Não saia desta tela:</strong> A prova será encerrada se você mudar de aba.</li>
-                            <li><strong>Não cole textos:</strong> O sistema detecta cópia.</li>
-                            <li>Mínimo: 1000 caracteres.</li>
+                            <li><strong>Não saia desta tela:</strong> O sistema detecta a troca de abas.</li>
+                            <li><strong>Não cole textos:</strong> A função de colar está desabilitada.</li>
+                            <li>A persistência em burlar as regras bloqueará sua prova automaticamente.</li>
                         </ul>
                     </div>
                 </aside>
@@ -135,7 +147,7 @@
                 <section class="editor-panel">
                     <div class="editor-wrapper">
                         <div class="editor-header">
-                            <span class="tab-active">Folha de Redação</span>
+                            <span class="tab-active">Folha de Resposta</span>
                             <div class="char-counter" id="counterBox">
                                 <span id="charCounter">0</span> / 2000
                             </div>
@@ -144,7 +156,7 @@
                         <textarea 
                             id="redacao" 
                             name="redacao" 
-                            placeholder="Digite sua redação aqui. O tempo já está contando..."
+                            placeholder="Comece a digitar sua redação aqui..."
                             spellcheck="false"
                             required
                         ></textarea>
@@ -152,10 +164,10 @@
 
                     <div class="editor-footer">
                         <div class="security-badge">
-                            <i class="ph-fill ph-shield-check"></i> Monitoramento Ativo
+                            <i class="ph-fill ph-circle"></i> Sistema Monitorado
                         </div>
                         <button type="submit" id="submitBtn" class="btn-primary">
-                            Entregar Prova <i class="ph-bold ph-paper-plane-right"></i>
+                            Entregar e Finalizar <i class="ph-bold ph-paper-plane-right"></i>
                         </button>
                     </div>
                 </section>
@@ -166,7 +178,7 @@
             <div class="modal-card success">
                 <div class="icon-circle success"><i class="ph-bold ph-check"></i></div>
                 <h2>Prova Recebida!</h2>
-                <p>Sua redação foi enviada para correção via IA. Aguarde o contato no WhatsApp.</p>
+                <p>Sua redação foi enviada com sucesso para nossa equipe de correção.</p>
                 <div class="receipt-box">
                     <div class="row"><span>Protocolo:</span> <strong id="protocolDisplay">...</strong></div>
                     <div class="row"><span>Data:</span> <strong id="submitDate">--/--/----</strong></div>
@@ -176,21 +188,22 @@
 
         <div id="errorMessage" class="modal-overlay hidden">
             <div class="modal-card error">
-                <div class="icon-circle error"><i class="ph-bold ph-ruler"></i></div>
-                <h2>Tamanho Inválido</h2>
-                <p>Sua redação deve ter entre <strong>1000</strong> e <strong>2000</strong> caracteres.</p>
+                <div class="icon-circle warning"><i class="ph-bold ph-ruler"></i></div>
+                <h2>Ajuste Necessário</h2>
+                <p>Para garantir uma boa avaliação, seu texto deve ter entre <strong>1000</strong> e <strong>2000</strong> caracteres.</p>
                 <div class="error-details">
-                    Atual: <strong id="currentCharsDisplay">0</strong> caracteres.
+                    Contagem atual: <strong id="currentCharsDisplay">0</strong>
                 </div>
-                <button id="closeErrorBtn" class="btn-danger">Continuar Escrevendo</button>
+                <button id="closeErrorBtn" class="btn-danger">Voltar e Editar</button>
             </div>
         </div>
 
         <div id="fraudMessage" class="modal-overlay hidden">
             <div class="modal-card error">
-                <div class="icon-circle error"><i class="ph-bold ph-siren"></i></div>
-                <h2>Prova Encerrada</h2>
-                <p>Detectamos uma ação não permitida (saída de tela ou tentativa de cola). Sua prova foi enviada automaticamente como está.</p>
+                <div class="icon-circle error"><i class="ph-bold ph-lock-key"></i></div>
+                <h2>Prova Bloqueada</h2>
+                <p>O sistema detectou uma violação das regras de segurança (saída de tela, recarregamento ou tentativa de cola).</p>
+                <p class="small-text">Sua prova foi encerrada e enviada para análise no estado atual.</p>
             </div>
         </div>
 

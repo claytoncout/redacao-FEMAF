@@ -1,24 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ============================================================
-    // 🔴 CONFIGURE AQUI SEU N8N
+    // 🔴 URL DO WEBHOOK
     // ============================================================
     const WEBHOOK_URL = "https://SEU-N8N-AQUI/webhook/vestibular-femaf"; 
     
-    // --- CONFIGURAÇÕES ---
+    // CONFIGURAÇÕES
     const MIN_CHARS = 1000;
     const MAX_CHARS = 2000;
     const EXAM_DURATION_SEC = 3 * 60 * 60; // 3 Horas
-    const STORAGE_KEY = 'femaf_mvp_v1';
+    const STORAGE_KEY = 'femaf_exam_session_v2'; // Mudei a chave para evitar conflito com versões antigas
 
-    // --- DOM ELEMENTS ---
+    // ELEMENTOS
     const introOverlay = document.getElementById('intro-overlay');
     const mainContainer = document.getElementById('main-exam-container');
     const startBtn = document.getElementById('startExamBtn');
     
     const inpName = document.getElementById('introName');
     const inpPhone = document.getElementById('introPhone');
-    const inpCourse = document.getElementById('introCourse');
+    const inpCourse = document.getElementById('introCourse'); // Agora é um Select
     const errorMsg = document.getElementById('loginError');
 
     const form = document.getElementById('contactForm');
@@ -36,87 +36,123 @@ document.addEventListener('DOMContentLoaded', () => {
     let timerInterval;
     let isSubmitting = false;
 
-    // --- INICIALIZAÇÃO ---
+    // --- 1. GERENCIAMENTO DE ESTADO E REFRESH ---
     checkSession();
 
     function checkSession() {
-        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (data && data.active) {
-            const now = Date.now();
-            if (now > data.deadline) {
-                alert("O tempo da sua prova expirou.");
-                localStorage.removeItem(STORAGE_KEY);
-                return;
-            }
-            restoreSession(data);
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        const data = JSON.parse(raw);
+        
+        // Se já foi finalizado ou bloqueado, não deixa entrar de novo
+        if (data.status === 'finished' || data.status === 'blocked') {
+            alert("Esta prova já foi finalizada ou bloqueada.");
+            localStorage.removeItem(STORAGE_KEY);
+            return;
+        }
+
+        // DETECÇÃO DE REFRESH (Página Recarregada)
+        // Se existe sessão ativa no storage, mas estamos no 'checkSession' (load da página),
+        // significa que o usuário recarregou a página durante a prova.
+        if (data.active) {
+            // AQUI APLICAMOS A REGRA DE BLOQUEIO POR REFRESH
+            handleFraud("Página recarregada");
+            return; 
         }
     }
 
-    function restoreSession(data) {
-        introOverlay.classList.add('intro-fade-out');
-        mainContainer.classList.remove('hidden-section');
+    // --- 2. SISTEMA DE ENVIOS (EVENT DRIVEN) ---
+    async function sendEvent(action, observation = null, finalRedaction = "") {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
         
-        // Preenche campos ocultos e visuais
-        document.getElementById('sidebarName').value = data.name;
-        document.getElementById('sidebarCourse').value = data.course;
-        document.getElementById('realNameInput').value = data.name;
-        document.getElementById('realPhoneInput').value = data.phone;
-        document.getElementById('realCourseInput').value = data.course;
-        
-        redacaoInput.value = data.text || "";
-        updateCounter(redacaoInput.value.length);
-        
-        startTimer((data.deadline - Date.now()) / 1000);
-        activateFraudProtection();
+        // Pega dados dos inputs ou do storage
+        const payload = {
+            acao: action, // inicio-prova | fim-prova | bloquear-aluno
+            observacoes: observation, // Motivo do bloqueio ou obs geral
+            aluno: {
+                nome: inpName.value || stored.name,
+                telefone: inpPhone.value || stored.phone,
+                curso: inpCourse.value || stored.course
+            },
+            prova: {
+                redacao: finalRedaction, // Só preenchido no fim
+                caracteres: finalRedaction.length,
+                data_evento: new Date().toISOString()
+            }
+        };
+
+        console.log(`[Event: ${action}]`, payload);
+
+        // Disparo Fire-and-Forget (não bloqueia a UI, exceto no submit final)
+        if(WEBHOOK_URL && WEBHOOK_URL.includes("http")) {
+            try {
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e) {
+                console.error("Erro ao enviar webhook", e);
+            }
+        }
     }
 
-    // --- LOGIN / INÍCIO ---
-    // Máscara de telefone simples
+    // --- 3. INÍCIO DA PROVA ---
     inpPhone.addEventListener('input', (e) => {
         let v = e.target.value.replace(/\D/g,"");
         v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
         e.target.value = v;
     });
 
-    startBtn.addEventListener('click', () => {
+    startBtn.addEventListener('click', async () => {
         const name = inpName.value.trim();
         const phone = inpPhone.value.replace(/\D/g, "");
-        const course = inpCourse.value.trim();
+        const course = inpCourse.value;
 
-        if (name.length < 3 || phone.length < 10 || course.length < 3) {
+        if (name.length < 3 || phone.length < 10 || !course) {
             errorMsg.classList.remove('hidden');
             return;
         }
 
-        // Cria sessão
+        // Salva estado inicial
         const deadline = Date.now() + (EXAM_DURATION_SEC * 1000);
-        const sessionData = { active: true, name, phone, course, deadline, text: "" };
+        const sessionData = { 
+            active: true, 
+            status: 'running',
+            name, phone, course, deadline 
+        };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
         
-        restoreSession(sessionData);
-    });
-
-    // --- EDITOR & TEMPO ---
-    redacaoInput.addEventListener('input', (e) => {
-        const text = e.target.value;
-        updateCounter(text.length);
+        // UI
+        startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Iniciando...';
         
-        // Salva rascunho
-        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if(data) {
-            data.text = text;
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-        }
+        // Dispara evento de INÍCIO
+        await sendEvent("inicio-prova", "Aluno iniciou a avaliação");
+
+        // Troca de tela
+        initializeExamInterface(sessionData);
     });
 
-    function updateCounter(len) {
-        charCounter.textContent = len;
-        if (len < MIN_CHARS || len > MAX_CHARS) {
-            charCounter.style.color = '#ef4444'; // Red
-        } else {
-            charCounter.style.color = '#16a34a'; // Green
-        }
+    function initializeExamInterface(data) {
+        introOverlay.classList.add('intro-fade-out');
+        setTimeout(() => introOverlay.style.display = 'none', 500); // Remove do fluxo
+        mainContainer.classList.remove('hidden-section');
+        
+        // Preenche sidebar
+        document.getElementById('sidebarName').value = data.name;
+        document.getElementById('sidebarCourse').value = data.course;
+        
+        startTimer((data.deadline - Date.now()) / 1000);
+        activateSecurityMonitors();
     }
+
+    // --- 4. EDITOR & TEMPO ---
+    redacaoInput.addEventListener('input', (e) => {
+        const len = e.target.value.length;
+        charCounter.textContent = len;
+        charCounter.style.color = (len < MIN_CHARS || len > MAX_CHARS) ? '#ef4444' : '#16a34a';
+    });
 
     function startTimer(seconds) {
         clearInterval(timerInterval);
@@ -124,12 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         timerInterval = setInterval(() => {
             if (timer <= 0) {
-                clearInterval(timerInterval);
-                document.getElementById('closureReason').value = 'tempo_esgotado';
-                submitExam(true); // Força envio
+                handleFraud("Tempo esgotado"); // Trata como bloqueio/fim forçado
                 return;
             }
-            
             timer--;
             const h = Math.floor(timer / 3600).toString().padStart(2, '0');
             const m = Math.floor((timer % 3600) / 60).toString().padStart(2, '0');
@@ -138,32 +171,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
-    // --- ANTIFRAUDE (RÍGIDO) ---
-    function activateFraudProtection() {
-        // 1. Bloqueia Colar
+    // --- 5. SEGURANÇA (ANTIFRAUDE) ---
+    function activateSecurityMonitors() {
+        // Bloqueia Colar
         redacaoInput.addEventListener('paste', (e) => {
             e.preventDefault();
-            alert("É proibido colar texto. A prova será encerrada se persistir.");
-            // Opcional: Descomentar linha abaixo para encerrar imediatamente no paste
-            // triggerFraudEnd("tentativa_colar"); 
+            handleFraud("Suspeita de colar");
         });
 
-        // 2. Bloqueia Saída da Tela (Blur)
+        // Bloqueia Saída da Tela (Blur)
         window.addEventListener('blur', () => {
-            if (!isSubmitting && localStorage.getItem(STORAGE_KEY)) {
-               triggerFraudEnd("saiu_da_tela_foco_perdido");
+            if (localStorage.getItem(STORAGE_KEY) && !isSubmitting) {
+                handleFraud("Aluno saiu da tela");
             }
         });
+        
+        // Bloqueia menu de contexto
+        document.addEventListener('contextmenu', event => event.preventDefault());
     }
 
-    function triggerFraudEnd(reason) {
-        document.getElementById('closureReason').value = reason;
+    // Função central de Bloqueio
+    function handleFraud(reason) {
+        // Evita múltiplos disparos
+        if (isSubmitting) return;
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (data && data.status === 'blocked') return;
+
+        clearInterval(timerInterval);
+        isSubmitting = true; // Trava novos envios
+
+        // Atualiza Storage para 'blocked'
+        if(data) {
+            data.status = 'blocked';
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+
+        // Mostra Modal
+        mainContainer.classList.add('hidden-section');
         modalFraud.classList.remove('hidden');
-        submitExam(true); // Envio forçado
+        
+        // Envia Webhook de Bloqueio
+        // Mandamos o texto que ele conseguiu escrever até o momento
+        sendEvent("bloquear-aluno", reason, redacaoInput.value);
     }
 
-    // --- ENVIO ---
-    form.addEventListener('submit', (e) => {
+    // --- 6. ENVIO FINAL (SUCESSO) ---
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const len = redacaoInput.value.length;
         
@@ -172,63 +225,29 @@ document.addEventListener('DOMContentLoaded', () => {
             modalError.classList.remove('hidden');
             return;
         }
-        submitExam(false);
-    });
 
-    closeErrorBtn.addEventListener('click', () => {
-        modalError.classList.add('hidden');
-    });
-
-    async function submitExam(forced) {
         if (isSubmitting) return;
         isSubmitting = true;
-        
         submitBtn.disabled = true;
         submitBtn.innerText = "Enviando...";
 
-        const payload = {
-            nome: document.getElementById('realNameInput').value,
-            telefone: document.getElementById('realPhoneInput').value,
-            curso: document.getElementById('realCourseInput').value,
-            redacao: redacaoInput.value,
-            caracteres: redacaoInput.value.length,
-            motivo: document.getElementById('closureReason').value,
-            data_envio: new Date().toISOString()
-        };
-
-        try {
-            // Tenta enviar para o n8n
-            if(WEBHOOK_URL.includes("http")) {
-                await fetch(WEBHOOK_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } else {
-                // Simulação local para teste se URL vazia
-                console.log("Simulando envio:", payload);
-                await new Promise(r => setTimeout(r, 1500));
-            }
-
-            // Limpa sessão e mostra sucesso (ou fraude se for o caso)
-            localStorage.removeItem(STORAGE_KEY);
-            clearInterval(timerInterval);
-
-            if (!forced) {
-                document.getElementById('submitDate').textContent = new Date().toLocaleDateString();
-                document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*10000);
-                mainContainer.classList.add('hidden-section');
-                modalSuccess.classList.remove('hidden');
-            } else {
-                // Se foi forçado (fraude/tempo), mantém o modal de fraude aberto e esconde a prova
-                mainContainer.classList.add('hidden-section');
-            }
-
-        } catch (err) {
-            alert("Erro ao enviar. Verifique sua conexão e tente novamente.");
-            isSubmitting = false;
-            submitBtn.disabled = false;
-            submitBtn.innerText = "Entregar Prova";
+        // Marca como finalizado no storage
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if(data) {
+            data.status = 'finished';
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
-    }
+
+        await sendEvent("fim-prova", "Prova entregue com sucesso", redacaoInput.value);
+
+        clearInterval(timerInterval);
+        mainContainer.classList.add('hidden-section');
+        
+        // Atualiza recibo visual
+        document.getElementById('submitDate').textContent = new Date().toLocaleDateString();
+        document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*10000);
+        modalSuccess.classList.remove('hidden');
+    });
+
+    closeErrorBtn.addEventListener('click', () => modalError.classList.add('hidden'));
 });
