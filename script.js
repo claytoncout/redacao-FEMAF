@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // 🔴 COLE AQUI SUA URL DO N8N
     // ============================================================
-    const WEBHOOK_URL = "https://primary-production-f8d8.up.railway.app/webhook-test/redacao-online-mvf"; 
+    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
     
     // CONFIGURAÇÕES
     const MIN_CHARS = 1000;
