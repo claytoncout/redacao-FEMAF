@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vestibular Online | FEMAF</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+
+    <div class="background-mesh"></div>
+
+    <div id="intro-overlay" class="intro-screen">
+        <div class="intro-card">
+            <div class="brand-header">
+                <div class="brand-logo"><i class="ph-fill ph-graduation-cap"></i></div>
+                <h2 class="brand-title">Vestibular <strong>FEMAF</strong></h2>
+            </div>
+
+            <div class="intro-content">
+                <h1>Acesso à Prova Online</h1>
+                <p>Insira seus dados exatamente como informado no WhatsApp.</p>
+
+                <div class="info-badges">
+                    <div class="badge warning">
+                        <i class="ph-bold ph-clock"></i> <span>3h de Duração</span>
+                    </div>
+                    <div class="badge info">
+                        <i class="ph-bold ph-text-aa"></i> <span>Min. 1000 carac.</span>
+                    </div>
+                </div>
+
+                <div class="login-grid">
+                    <div class="input-group">
+                        <label>Nome Completo</label>
+                        <div class="input-box">
+                            <i class="ph ph-user"></i>
+                            <input type="text" id="introName" placeholder="Seu nome completo" autocomplete="name">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>WhatsApp (com DDD)</label>
+                        <div class="input-box">
+                            <i class="ph ph-whatsapp-logo"></i>
+                            <input type="tel" id="introPhone" placeholder="(00) 00000-0000" maxlength="15">
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label>Curso Pretendido</label>
+                        <div class="input-box">
+                            <i class="ph ph-books"></i>
+                            <input type="text" id="introCourse" placeholder="Ex: Direito, Enfermagem..." autocomplete="off">
+                        </div>
+                    </div>
+                    
+                    <p id="loginError" class="error-toast hidden">
+                        <i class="ph-bold ph-warning-circle"></i> Preencha todos os campos.
+                    </p>
+                </div>
+
+                <button id="startExamBtn" class="btn-primary large">
+                    Iniciar Prova Agora <i class="ph-bold ph-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-exam-container" class="exam-layout hidden-section">
+        
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo-mini">FEMAF</div>
+            </div>
+            <div class="header-right">
+                <div class="timer-badge" id="timerBox">
+                    <i class="ph-bold ph-clock"></i>
+                    <span id="displayTimer">03:00:00</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="exam-workspace">
+            
+            <form id="contactForm" class="workspace-grid">
+                <input type="hidden" name="name" id="realNameInput">
+                <input type="hidden" name="phone" id="realPhoneInput">
+                <input type="hidden" name="course" id="realCourseInput">
+                <input type="hidden" name="reason" id="closureReason" value="finalizado_pelo_aluno">
+
+                <aside class="theme-panel">
+                    
+                    <div class="panel-card user-card">
+                        <div class="card-label">
+                            <i class="ph-bold ph-identification-badge"></i> Candidato
+                        </div>
+                        
+                        <div class="user-data-list">
+                            <div class="data-item">
+                                <span class="data-label">Nome</span>
+                                <input type="text" id="sidebarName" class="clean-input" disabled value="...">
+                            </div>
+                            
+                            <div class="data-item">
+                                <span class="data-label">Curso</span>
+                                <input type="text" id="sidebarCourse" class="clean-input" disabled value="...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="panel-card theme-card">
+                        <div class="card-label"><i class="ph-bold ph-lightbulb"></i> Tema da Redação</div>
+                        <h2 id="themeDisplay">Tema Livre</h2>
+                        <p id="themeSupportText">Escreva uma redação dissertativa-argumentativa sobre um tema de sua escolha que seja relevante para a sociedade atual.</p>
+                    </div>
+                    
+                    <div class="panel-card info-card">
+                        <div class="card-label"><i class="ph-bold ph-warning-octagon"></i> Regras Importantes</div>
+                        <ul>
+                            <li><strong>Não saia desta tela:</strong> A prova será encerrada se você mudar de aba.</li>
+                            <li><strong>Não cole textos:</strong> O sistema detecta cópia.</li>
+                            <li>Mínimo: 1000 caracteres.</li>
+                        </ul>
+                    </div>
+                </aside>
+
+                <section class="editor-panel">
+                    <div class="editor-wrapper">
+                        <div class="editor-header">
+                            <span class="tab-active">Folha de Redação</span>
+                            <div class="char-counter" id="counterBox">
+                                <span id="charCounter">0</span> / 2000
+                            </div>
+                        </div>
+                        
+                        <textarea 
+                            id="redacao" 
+                            name="redacao" 
+                            placeholder="Digite sua redação aqui. O tempo já está contando..."
+                            spellcheck="false"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="editor-footer">
+                        <div class="security-badge">
+                            <i class="ph-fill ph-shield-check"></i> Monitoramento Ativo
+                        </div>
+                        <button type="submit" id="submitBtn" class="btn-primary">
+                            Entregar Prova <i class="ph-bold ph-paper-plane-right"></i>
+                        </button>
+                    </div>
+                </section>
+            </form>
+        </main>
+
+        <div id="successMessage" class="modal-overlay hidden">
+            <div class="modal-card success">
+                <div class="icon-circle success"><i class="ph-bold ph-check"></i></div>
+                <h2>Prova Recebida!</h2>
+                <p>Sua redação foi enviada para correção via IA. Aguarde o contato no WhatsApp.</p>
+                <div class="receipt-box">
+                    <div class="row"><span>Protocolo:</span> <strong id="protocolDisplay">...</strong></div>
+                    <div class="row"><span>Data:</span> <strong id="submitDate">--/--/----</strong></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="errorMessage" class="modal-overlay hidden">
+            <div class="modal-card error">
+                <div class="icon-circle error"><i class="ph-bold ph-ruler"></i></div>
+                <h2>Tamanho Inválido</h2>
+                <p>Sua redação deve ter entre <strong>1000</strong> e <strong>2000</strong> caracteres.</p>
+                <div class="error-details">
+                    Atual: <strong id="currentCharsDisplay">0</strong> caracteres.
+                </div>
+                <button id="closeErrorBtn" class="btn-danger">Continuar Escrevendo</button>
+            </div>
+        </div>
+
+        <div id="fraudMessage" class="modal-overlay hidden">
+            <div class="modal-card error">
+                <div class="icon-circle error"><i class="ph-bold ph-siren"></i></div>
+                <h2>Prova Encerrada</h2>
+                <p>Detectamos uma ação não permitida (saída de tela ou tentativa de cola). Sua prova foi enviada automaticamente como está.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
