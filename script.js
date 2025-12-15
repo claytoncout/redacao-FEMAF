@@ -1,24 +1,24 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ============================================================
-    // 🔴 URL DO WEBHOOK
+    // 🔴 COLE AQUI SUA URL DO N8N
     // ============================================================
-    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
+    const WEBHOOK_URL = "https://primary-production-f8d8.up.railway.app/webhook-test/redacao-online-mvf"; 
     
     // CONFIGURAÇÕES
     const MIN_CHARS = 1000;
     const MAX_CHARS = 2000;
     const EXAM_DURATION_SEC = 3 * 60 * 60; // 3 Horas
-    const STORAGE_KEY = 'femaf_exam_session_v2'; // Mudei a chave para evitar conflito com versões antigas
+    const STORAGE_KEY = 'femaf_exam_session_v4'; // Versão 4 (Flat JSON)
 
-    // ELEMENTOS
+    // ELEMENTOS DOM
     const introOverlay = document.getElementById('intro-overlay');
     const mainContainer = document.getElementById('main-exam-container');
     const startBtn = document.getElementById('startExamBtn');
     
     const inpName = document.getElementById('introName');
     const inpPhone = document.getElementById('introPhone');
-    const inpCourse = document.getElementById('introCourse'); // Agora é um Select
+    const inpCourse = document.getElementById('introCourse');
     const errorMsg = document.getElementById('loginError');
 
     const form = document.getElementById('contactForm');
@@ -36,69 +36,42 @@ document.addEventListener('DOMContentLoaded', () => {
     let timerInterval;
     let isSubmitting = false;
 
-    // --- 1. GERENCIAMENTO DE ESTADO E REFRESH ---
+    // ============================================================
+    // 1. CHECAGEM DE SESSÃO E ANTI-REFRESH
+    // ============================================================
     checkSession();
 
     function checkSession() {
         const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
+        if (!raw) return; 
 
         const data = JSON.parse(raw);
         
-        // Se já foi finalizado ou bloqueado, não deixa entrar de novo
+        // Bloqueia se já finalizou
         if (data.status === 'finished' || data.status === 'blocked') {
-            alert("Esta prova já foi finalizada ou bloqueada.");
-            localStorage.removeItem(STORAGE_KEY);
+            blockAccess("Prova já finalizada ou bloqueada.");
             return;
         }
 
-        // DETECÇÃO DE REFRESH (Página Recarregada)
-        // Se existe sessão ativa no storage, mas estamos no 'checkSession' (load da página),
-        // significa que o usuário recarregou a página durante a prova.
-        if (data.active) {
-            // AQUI APLICAMOS A REGRA DE BLOQUEIO POR REFRESH
-            handleFraud("Página recarregada");
+        // Bloqueia se deu F5 (Refresh) com a prova rodando
+        if (data.status === 'running') {
+            handleFraud("Página recarregada durante a prova");
             return; 
         }
     }
 
-    // --- 2. SISTEMA DE ENVIOS (EVENT DRIVEN) ---
-    async function sendEvent(action, observation = null, finalRedaction = "") {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-        
-        // Pega dados dos inputs ou do storage
-        const payload = {
-            acao: action, // inicio-prova | fim-prova | bloquear-aluno
-            observacoes: observation, // Motivo do bloqueio ou obs geral
-            aluno: {
-                nome: inpName.value || stored.name,
-                telefone: inpPhone.value || stored.phone,
-                curso: inpCourse.value || stored.course
-            },
-            prova: {
-                redacao: finalRedaction, // Só preenchido no fim
-                caracteres: finalRedaction.length,
-                data_evento: new Date().toISOString()
-            }
-        };
-
-        console.log(`[Event: ${action}]`, payload);
-
-        // Disparo Fire-and-Forget (não bloqueia a UI, exceto no submit final)
-        if(WEBHOOK_URL && WEBHOOK_URL.includes("http")) {
-            try {
-                await fetch(WEBHOOK_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } catch (e) {
-                console.error("Erro ao enviar webhook", e);
-            }
-        }
+    function blockAccess(msg) {
+        alert(msg);
+        introOverlay.style.display = 'flex';
+        startBtn.disabled = true;
+        startBtn.innerText = "Acesso Negado";
     }
 
-    // --- 3. INÍCIO DA PROVA ---
+    // ============================================================
+    // 2. LOGIN COM VALIDAÇÃO (JSON PLANO)
+    // ============================================================
+    
+    // Máscara Visual (apenas para UX, o envio será limpo)
     inpPhone.addEventListener('input', (e) => {
         let v = e.target.value.replace(/\D/g,"");
         v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
@@ -107,39 +80,85 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startBtn.addEventListener('click', async () => {
         const name = inpName.value.trim();
-        const phone = inpPhone.value.replace(/\D/g, "");
+        const rawPhone = inpPhone.value.replace(/\D/g, ""); // LIMPEZA DO TELEFONE
         const course = inpCourse.value;
 
-        if (name.length < 3 || phone.length < 10 || !course) {
-            errorMsg.classList.remove('hidden');
+        // Validação básica
+        if (name.length < 3 || rawPhone.length < 10 || !course) {
+            showLoginError("Preencha todos os campos corretamente.");
             return;
         }
 
-        // Salva estado inicial
+        // UX: Botão carregando
+        const originalBtnText = startBtn.innerHTML;
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Validando...';
+        errorMsg.classList.add('hidden');
+
+        try {
+            // PAYLOAD PLANO PARA O N8N
+            const loginPayload = {
+                acao: "solicitar-acesso",
+                nome: name,
+                telefone: rawPhone, // Envia: 11999999999
+                curso: course
+            };
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(loginPayload)
+            });
+
+            if (!response.ok) throw new Error("Erro no servidor.");
+
+            const authData = await response.json();
+
+            // Espera resposta: { "autorizado": true }
+            if (authData.autorizado === true) {
+                startExamSession(name, rawPhone, course);
+            } else {
+                showLoginError(authData.mensagem || "Acesso negado.");
+                startBtn.disabled = false;
+                startBtn.innerHTML = originalBtnText;
+            }
+
+        } catch (error) {
+            console.error(error);
+            showLoginError("Erro de conexão. Tente novamente.");
+            startBtn.disabled = false;
+            startBtn.innerHTML = originalBtnText;
+        }
+    });
+
+    function showLoginError(msg) {
+        errorMsg.innerHTML = `<i class="ph-bold ph-warning-circle"></i> ${msg}`;
+        errorMsg.classList.remove('hidden');
+    }
+
+    function startExamSession(name, phone, course) {
         const deadline = Date.now() + (EXAM_DURATION_SEC * 1000);
+        
+        // Salva sessão localmente
         const sessionData = { 
             active: true, 
-            status: 'running',
+            status: 'running', 
             name, phone, course, deadline 
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
         
-        // UI
-        startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Iniciando...';
-        
-        // Dispara evento de INÍCIO
-        await sendEvent("inicio-prova", "Aluno iniciou a avaliação");
+        // Dispara evento de início
+        sendEvent("inicio-prova", "Prova iniciada");
 
-        // Troca de tela
         initializeExamInterface(sessionData);
-    });
+    }
 
     function initializeExamInterface(data) {
         introOverlay.classList.add('intro-fade-out');
-        setTimeout(() => introOverlay.style.display = 'none', 500); // Remove do fluxo
+        setTimeout(() => introOverlay.style.display = 'none', 500);
         mainContainer.classList.remove('hidden-section');
         
-        // Preenche sidebar
+        // Preenche sidebar (Visual)
         document.getElementById('sidebarName').value = data.name;
         document.getElementById('sidebarCourse').value = data.course;
         
@@ -147,20 +166,16 @@ document.addEventListener('DOMContentLoaded', () => {
         activateSecurityMonitors();
     }
 
-    // --- 4. EDITOR & TEMPO ---
-    redacaoInput.addEventListener('input', (e) => {
-        const len = e.target.value.length;
-        charCounter.textContent = len;
-        charCounter.style.color = (len < MIN_CHARS || len > MAX_CHARS) ? '#ef4444' : '#16a34a';
-    });
-
+    // ============================================================
+    // 3. MONITORAMENTO E EDITOR
+    // ============================================================
     function startTimer(seconds) {
         clearInterval(timerInterval);
         let timer = seconds;
         
         timerInterval = setInterval(() => {
             if (timer <= 0) {
-                handleFraud("Tempo esgotado"); // Trata como bloqueio/fim forçado
+                handleFraud("Tempo esgotado"); 
                 return;
             }
             timer--;
@@ -171,51 +186,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
-    // --- 5. SEGURANÇA (ANTIFRAUDE) ---
     function activateSecurityMonitors() {
-        // Bloqueia Colar
+        // Antifraude: Colar
         redacaoInput.addEventListener('paste', (e) => {
             e.preventDefault();
-            handleFraud("Suspeita de colar");
+            handleFraud("Suspeita de colar (Paste)");
         });
 
-        // Bloqueia Saída da Tela (Blur)
+        // Antifraude: Saiu da tela (Blur)
         window.addEventListener('blur', () => {
-            if (localStorage.getItem(STORAGE_KEY) && !isSubmitting) {
-                handleFraud("Aluno saiu da tela");
+            if (!isSubmitting && localStorage.getItem(STORAGE_KEY)) {
+                handleFraud("Saiu da tela (Aba minimizada)");
             }
         });
         
-        // Bloqueia menu de contexto
         document.addEventListener('contextmenu', event => event.preventDefault());
     }
 
-    // Função central de Bloqueio
     function handleFraud(reason) {
-        // Evita múltiplos disparos
         if (isSubmitting) return;
+
         const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (data && data.status === 'blocked') return;
 
         clearInterval(timerInterval);
-        isSubmitting = true; // Trava novos envios
+        isSubmitting = true; 
 
-        // Atualiza Storage para 'blocked'
         if(data) {
             data.status = 'blocked';
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
 
-        // Mostra Modal
         mainContainer.classList.add('hidden-section');
         modalFraud.classList.remove('hidden');
         
-        // Envia Webhook de Bloqueio
-        // Mandamos o texto que ele conseguiu escrever até o momento
+        // Envia bloqueio
         sendEvent("bloquear-aluno", reason, redacaoInput.value);
     }
 
-    // --- 6. ENVIO FINAL (SUCESSO) ---
+    redacaoInput.addEventListener('input', (e) => {
+        const len = e.target.value.length;
+        charCounter.textContent = len;
+        charCounter.style.color = (len < MIN_CHARS || len > MAX_CHARS) ? '#ef4444' : '#16a34a';
+    });
+
+
+    // ============================================================
+    // 4. ENVIO DE DADOS (FLAT JSON & CLEAN PHONE)
+    // ============================================================
+    
+    async function sendEvent(action, observation = null, finalRedaction = "") {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        
+        // Dados recuperados do storage ou dos inputs
+        const currentName = stored.name || inpName.value;
+        const currentPhone = stored.phone || inpPhone.value.replace(/\D/g, ""); // Garante limpeza
+        const currentCourse = stored.course || inpCourse.value;
+
+        // PAYLOAD PLANO (FLAT)
+        const payload = {
+            acao: action, 
+            observacoes: observation,
+            nome: currentName,
+            telefone: currentPhone, // Ex: 11958009674
+            curso: currentCourse,
+            redacao: finalRedaction,
+            caracteres: finalRedaction.length,
+            data_evento: new Date().toISOString()
+        };
+
+        if(WEBHOOK_URL.includes("http")) {
+            try {
+                if (action === 'solicitar-acesso') return; 
+
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e) {
+                console.error("Webhook error:", e);
+            }
+        }
+    }
+
+    // Submit Final
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const len = redacaoInput.value.length;
@@ -231,7 +286,6 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         submitBtn.innerText = "Enviando...";
 
-        // Marca como finalizado no storage
         const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if(data) {
             data.status = 'finished';
@@ -243,11 +297,13 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(timerInterval);
         mainContainer.classList.add('hidden-section');
         
-        // Atualiza recibo visual
         document.getElementById('submitDate').textContent = new Date().toLocaleDateString();
-        document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*10000);
+        document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*100000);
         modalSuccess.classList.remove('hidden');
     });
 
-    closeErrorBtn.addEventListener('click', () => modalError.classList.add('hidden'));
+    closeErrorBtn.addEventListener('click', (e) => {
+        e.preventDefault(); 
+        modalError.classList.add('hidden');
+    });
 });
