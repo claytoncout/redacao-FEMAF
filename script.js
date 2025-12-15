@@ -1,17 +1,20 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ============================================================
-    // 🔴 COLE AQUI SUA URL DO N8N
+    // ⚙️ CONFIGURAÇÕES GERAIS
     // ============================================================
-    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook-test/femaf"; 
+    const WEBHOOK_URL = "https://n8n-libs-production.up.railway.app/webhook/femaf"; 
+    const SUPPORT_PHONE = "5599999999999"; // 🔴 COLOQUE O NUMERO DA FEMAF AQUI (COM DDI 55 + DDD)
+    const SUPPORT_PHONE_VISUAL = "(99) 99999-9999"; // O que aparece escrito na tela
     
-    // CONFIGURAÇÕES
     const MIN_CHARS = 1000;
     const MAX_CHARS = 2000;
     const EXAM_DURATION_SEC = 3 * 60 * 60; // 3 Horas
-    const STORAGE_KEY = 'femaf_exam_session_v4'; // Versão 4 (Flat JSON)
+    const STORAGE_KEY = 'femaf_mvp_session_v6'; 
 
-    // ELEMENTOS DOM
+    // ============================================================
+    // 🖥️ ELEMENTOS DO DOM
+    // ============================================================
     const introOverlay = document.getElementById('intro-overlay');
     const mainContainer = document.getElementById('main-exam-container');
     const startBtn = document.getElementById('startExamBtn');
@@ -37,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSubmitting = false;
 
     // ============================================================
-    // 1. CHECAGEM DE SESSÃO E ANTI-REFRESH
+    // 1. CHECAGEM DE SESSÃO
     // ============================================================
     checkSession();
 
@@ -47,31 +50,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const data = JSON.parse(raw);
         
-        // Bloqueia se já finalizou
         if (data.status === 'finished' || data.status === 'blocked') {
-            blockAccess("Prova já finalizada ou bloqueada.");
+            forceBlockScreen("Prova já finalizada.");
             return;
         }
 
-        // Bloqueia se deu F5 (Refresh) com a prova rodando
         if (data.status === 'running') {
-            handleFraud("Página recarregada durante a prova");
+            handleFraud("Página recarregada (F5) durante a prova");
             return; 
         }
     }
 
-    function blockAccess(msg) {
+    function forceBlockScreen(msg) {
         alert(msg);
         introOverlay.style.display = 'flex';
         startBtn.disabled = true;
-        startBtn.innerText = "Acesso Negado";
+        startBtn.innerText = "Acesso Bloqueado";
     }
 
     // ============================================================
-    // 2. LOGIN COM VALIDAÇÃO (JSON PLANO)
+    // 2. LÓGICA DE LOGIN (INICIO-PROVA)
     // ============================================================
     
-    // Máscara Visual (apenas para UX, o envio será limpo)
     inpPhone.addEventListener('input', (e) => {
         let v = e.target.value.replace(/\D/g,"");
         v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
@@ -80,10 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     startBtn.addEventListener('click', async () => {
         const name = inpName.value.trim();
-        const rawPhone = inpPhone.value.replace(/\D/g, ""); // LIMPEZA DO TELEFONE
+        const rawPhone = inpPhone.value.replace(/\D/g, ""); 
         const course = inpCourse.value;
 
-        // Validação básica
         if (name.length < 3 || rawPhone.length < 10 || !course) {
             showLoginError("Preencha todos os campos corretamente.");
             return;
@@ -92,44 +91,51 @@ document.addEventListener('DOMContentLoaded', () => {
         // UX: Botão carregando
         const originalBtnText = startBtn.innerHTML;
         startBtn.disabled = true;
-        startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Validando...';
+        startBtn.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Verificando...';
         errorMsg.classList.add('hidden');
 
         try {
-            // PAYLOAD PLANO PARA O N8N
-            const loginPayload = {
-                acao: "solicitar-acesso",
+            const response = await sendToWebhook({
+                acao: "inicio-prova",
                 nome: name,
-                telefone: rawPhone, // Envia: 11999999999
+                telefone: rawPhone,
                 curso: course
-            };
-
-            const response = await fetch(WEBHOOK_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(loginPayload)
             });
 
-            if (!response.ok) throw new Error("Erro no servidor.");
-
-            const authData = await response.json();
-
-            // Espera resposta: { "autorizado": true }
-            if (authData.autorizado === true) {
+            // LÓGICA DE DECISÃO RÍGIDA
+            // Só passa se autorizado for EXPLICITAMENTE true
+            if (response && response.autorizado === true) {
                 startExamSession(name, rawPhone, course);
             } else {
-                showLoginError(authData.mensagem || "Acesso negado.");
+                // Qualquer outra coisa (false, null, undefined, vazio) cai aqui
+                showContactSupportError();
                 startBtn.disabled = false;
                 startBtn.innerHTML = originalBtnText;
             }
 
         } catch (error) {
-            console.error(error);
-            showLoginError("Erro de conexão. Tente novamente.");
+            console.error("Erro no fluxo:", error);
+            // Erro de rede ou servidor fora do ar também cai no suporte
+            showContactSupportError();
             startBtn.disabled = false;
             startBtn.innerHTML = originalBtnText;
         }
     });
+
+    // Função específica para direcionar ao WhatsApp
+    function showContactSupportError() {
+        const msg = `
+            Houve um problema com seu processo seletivo.<br>
+            Entre em contato com a secretaria: 
+            <a href="https://wa.me/${SUPPORT_PHONE}?text=Ola,%20tive%20problema%20ao%20acessar%20a%20prova" 
+               target="_blank" 
+               style="color: var(--danger); font-weight: 800; text-decoration: underline;">
+               ${SUPPORT_PHONE_VISUAL}
+            </a>
+        `;
+        errorMsg.innerHTML = `<i class="ph-bold ph-whatsapp-logo"></i> <span>${msg}</span>`;
+        errorMsg.classList.remove('hidden');
+    }
 
     function showLoginError(msg) {
         errorMsg.innerHTML = `<i class="ph-bold ph-warning-circle"></i> ${msg}`;
@@ -138,18 +144,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startExamSession(name, phone, course) {
         const deadline = Date.now() + (EXAM_DURATION_SEC * 1000);
-        
-        // Salva sessão localmente
         const sessionData = { 
             active: true, 
             status: 'running', 
             name, phone, course, deadline 
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
-        
-        // Dispara evento de início
-        sendEvent("inicio-prova", "Prova iniciada");
-
         initializeExamInterface(sessionData);
     }
 
@@ -158,7 +158,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => introOverlay.style.display = 'none', 500);
         mainContainer.classList.remove('hidden-section');
         
-        // Preenche sidebar (Visual)
         document.getElementById('sidebarName').value = data.name;
         document.getElementById('sidebarCourse').value = data.course;
         
@@ -167,12 +166,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // 3. MONITORAMENTO E EDITOR
+    // 3. SISTEMA DE PROVA (TIMER & MONITOR)
     // ============================================================
     function startTimer(seconds) {
         clearInterval(timerInterval);
         let timer = seconds;
-        
         timerInterval = setInterval(() => {
             if (timer <= 0) {
                 handleFraud("Tempo esgotado"); 
@@ -187,25 +185,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function activateSecurityMonitors() {
-        // Antifraude: Colar
         redacaoInput.addEventListener('paste', (e) => {
             e.preventDefault();
             handleFraud("Suspeita de colar (Paste)");
         });
-
-        // Antifraude: Saiu da tela (Blur)
         window.addEventListener('blur', () => {
             if (!isSubmitting && localStorage.getItem(STORAGE_KEY)) {
                 handleFraud("Saiu da tela (Aba minimizada)");
             }
         });
-        
         document.addEventListener('contextmenu', event => event.preventDefault());
     }
 
     function handleFraud(reason) {
         if (isSubmitting) return;
-
         const data = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (data && data.status === 'blocked') return;
 
@@ -220,8 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
         mainContainer.classList.add('hidden-section');
         modalFraud.classList.remove('hidden');
         
-        // Envia bloqueio
-        sendEvent("bloquear-aluno", reason, redacaoInput.value);
+        sendToWebhook({
+            acao: "bloquear-aluno",
+            observacoes: reason,
+            redacao: redacaoInput.value
+        });
     }
 
     redacaoInput.addEventListener('input', (e) => {
@@ -230,47 +226,9 @@ document.addEventListener('DOMContentLoaded', () => {
         charCounter.style.color = (len < MIN_CHARS || len > MAX_CHARS) ? '#ef4444' : '#16a34a';
     });
 
-
     // ============================================================
-    // 4. ENVIO DE DADOS (FLAT JSON & CLEAN PHONE)
+    // 4. SUBMIT E ENVIO
     // ============================================================
-    
-    async function sendEvent(action, observation = null, finalRedaction = "") {
-        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
-        
-        // Dados recuperados do storage ou dos inputs
-        const currentName = stored.name || inpName.value;
-        const currentPhone = stored.phone || inpPhone.value.replace(/\D/g, ""); // Garante limpeza
-        const currentCourse = stored.course || inpCourse.value;
-
-        // PAYLOAD PLANO (FLAT)
-        const payload = {
-            acao: action, 
-            observacoes: observation,
-            nome: currentName,
-            telefone: currentPhone, // Ex: 11958009674
-            curso: currentCourse,
-            redacao: finalRedaction,
-            caracteres: finalRedaction.length,
-            data_evento: new Date().toISOString()
-        };
-
-        if(WEBHOOK_URL.includes("http")) {
-            try {
-                if (action === 'solicitar-acesso') return; 
-
-                await fetch(WEBHOOK_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    headers: { 'Content-Type': 'application/json' }
-                });
-            } catch (e) {
-                console.error("Webhook error:", e);
-            }
-        }
-    }
-
-    // Submit Final
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const len = redacaoInput.value.length;
@@ -292,18 +250,58 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         }
 
-        await sendEvent("fim-prova", "Prova entregue com sucesso", redacaoInput.value);
+        try {
+            await sendToWebhook({
+                acao: "fim-prova",
+                observacoes: "Entregue com sucesso",
+                redacao: redacaoInput.value
+            });
+            
+            clearInterval(timerInterval);
+            mainContainer.classList.add('hidden-section');
+            document.getElementById('submitDate').textContent = new Date().toLocaleDateString();
+            document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*100000);
+            modalSuccess.classList.remove('hidden');
 
-        clearInterval(timerInterval);
-        mainContainer.classList.add('hidden-section');
-        
-        document.getElementById('submitDate').textContent = new Date().toLocaleDateString();
-        document.getElementById('protocolDisplay').textContent = "FEMAF-" + Math.floor(Math.random()*100000);
-        modalSuccess.classList.remove('hidden');
+        } catch (error) {
+            alert("Erro de conexão. Se o problema persistir, tire print da redação e envie no WhatsApp.");
+            submitBtn.disabled = false;
+            isSubmitting = false;
+        }
     });
 
     closeErrorBtn.addEventListener('click', (e) => {
         e.preventDefault(); 
         modalError.classList.add('hidden');
     });
+
+    async function sendToWebhook(payloadExtra) {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+        const baseData = {
+            nome: stored.name || inpName.value,
+            telefone: stored.phone || inpPhone.value.replace(/\D/g, ""),
+            curso: stored.course || inpCourse.value,
+            data_evento: new Date().toISOString()
+        };
+
+        const finalPayload = { ...baseData, ...payloadExtra };
+        
+        if (finalPayload.redacao) {
+            finalPayload.caracteres = finalPayload.redacao.length;
+        }
+
+        console.log("Enviando:", finalPayload);
+
+        const response = await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json' 
+            },
+            body: JSON.stringify(finalPayload)
+        });
+
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
+        return await response.json();
+    }
 });
