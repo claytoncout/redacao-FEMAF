@@ -5,15 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     const CONFIG = {
         WEBHOOK_URL: "https://n8n-libs-production.up.railway.app/webhook/femaf", 
-        SUPPORT_PHONE: "5511999999999", 
+        SUPPORT_PHONE: "5511999999999", // 🔴 SEU WHATSAPP
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v9' 
+        STORAGE_KEY: 'femaf_mvp_session_v10' // Versão 10
     };
 
     // ============================================================
-    // 🖥️ ELEMENTOS DE TELA
+    // 🖥️ CACHE DE ELEMENTOS
     // ============================================================
     const UI = {
         screens: { intro: document.getElementById('intro-overlay'), exam: document.getElementById('main-exam-container') },
@@ -40,13 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         modals: {
             success: document.getElementById('successMessage'),
-            error: document.getElementById('errorMessage'), // Usaremos este para avisos também
+            error: document.getElementById('errorMessage'),
             fraud: document.getElementById('fraudMessage')
         }
     };
     
     let state = { timerInterval: null, isSubmitting: false };
 
+    // ============================================================
+    // INICIALIZAÇÃO
+    // ============================================================
     init();
 
     function init() {
@@ -69,26 +72,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setupEventListeners() {
+        // Máscara
         UI.inputs.phone.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g,"");
             v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
             e.target.value = v;
         });
 
+        // Botões
         UI.buttons.start.addEventListener('click', handleLogin);
-        UI.inputs.redacao.addEventListener('input', updateCharCounter);
-        document.getElementById('contactForm').addEventListener('submit', handleSubmit);
-        
-        // Botão de fechar modal (Serve para erro e para aviso de colar)
         UI.buttons.closeError.addEventListener('click', (e) => {
             e.preventDefault(); 
             UI.modals.error.classList.add('hidden');
-            UI.inputs.redacao.focus(); // Devolve o foco para o texto
+            UI.inputs.redacao.focus(); 
         });
+
+        // Editor e Envio
+        UI.inputs.redacao.addEventListener('input', updateCharCounter);
+        document.getElementById('contactForm').addEventListener('submit', handleSubmit);
     }
 
     // ============================================================
-    // LÓGICA DE LOGIN
+    // 1. LOGIN
     // ============================================================
     async function handleLogin() {
         const name = UI.inputs.name.value.trim();
@@ -108,6 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const internationalPhone = "+55" + rawPhone; 
 
         try {
+            // Envia login
             const response = await sendToWebhook({ acao: "inicio-prova", nome: name, telefone: internationalPhone, curso: course });
 
             if (response && response.autorizado === true) {
@@ -117,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetLoginButton(originalBtnText);
             }
         } catch (error) {
-            showContactSupportError("Erro de conexão com o servidor.");
+            showContactSupportError("Erro de comunicação com o servidor.");
             resetLoginButton(originalBtnText);
         }
     }
@@ -139,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // SISTEMA DA PROVA
+    // 2. SESSÃO DA PROVA
     // ============================================================
     function startExamSession(name, phone, course) {
         const deadline = Date.now() + (CONFIG.EXAM_DURATION_SEC * 1000);
@@ -173,17 +179,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
 
+    function updateCharCounter(e) {
+        const len = e.target.value.length;
+        UI.feedback.charCounter.textContent = len;
+        UI.feedback.charCounter.style.color = (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) ? '#ef4444' : '#16a34a';
+    }
+
     // ============================================================
-    // 🛡️ SEGURANÇA E AVISOS (AQUI ESTÁ A CORREÇÃO DO COLAR)
+    // 3. SEGURANÇA (Colar = Aviso / Sair = Bloqueio)
     // ============================================================
     function activateSecurityMonitors() {
-        // CORREÇÃO: Ao colar, apenas avisa (não bloqueia a prova)
         UI.inputs.redacao.addEventListener('paste', (e) => {
-            e.preventDefault(); // Impede o texto de aparecer
-            showPasteWarning(); // Mostra o aviso bonito
+            e.preventDefault();
+            showPasteWarning(); // Apenas avisa, não bloqueia
         });
-
-        UI.inputs.redacao.addEventListener('input', updateCharCounter);
 
         window.addEventListener('blur', () => {
             const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
@@ -196,75 +205,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showPasteWarning() {
-        // Manipula o Modal de Erro para parecer um Aviso
         const modal = UI.modals.error;
         const icon = modal.querySelector('.icon-circle');
-        const title = modal.querySelector('h2');
-        const text = modal.querySelector('p');
-        const details = modal.querySelector('.error-details');
-        const btn = document.getElementById('closeErrorBtn');
-
-        // Estilo de Aviso (Amarelo)
-        icon.className = 'icon-circle warning'; // Usa classe warning do CSS
-        icon.innerHTML = '<i class="ph-bold ph-hand-palm"></i>'; // Ícone de Pare/Mão
-        title.innerText = "Função Bloqueada";
-        text.innerHTML = "Para garantir a integridade da avaliação, <strong>não é permitido colar textos</strong>.<br>Por favor, digite sua redação.";
-        details.style.display = 'none'; // Esconde detalhes técnicos
-        btn.innerText = "Entendi, vou digitar";
+        
+        // Estilo de Aviso Amarelo
+        icon.className = 'icon-circle warning'; 
+        icon.innerHTML = '<i class="ph-bold ph-hand-palm"></i>'; 
+        modal.querySelector('h2').innerText = "Função Bloqueada";
+        modal.querySelector('p').innerHTML = "Para garantir a integridade da avaliação, <strong>não é permitido colar textos</strong>.<br>Por favor, digite sua redação.";
+        modal.querySelector('.error-details').style.display = 'none';
+        document.getElementById('closeErrorBtn').innerText = "Entendi, vou digitar";
         
         modal.classList.remove('hidden');
     }
 
     function handleFraud(reason) {
         if (state.isSubmitting) return;
-        const data = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY));
-        if (data && data.status === 'blocked') return;
+        
+        // Prepara dados de bloqueio
+        const data = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
+        if (data.status === 'blocked') return;
 
         clearInterval(state.timerInterval);
         state.isSubmitting = true; 
+        
+        data.status = 'blocked';
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data));
 
-        if(data) {
-            data.status = 'blocked';
-            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data));
-        }
-
-        UI.screens.exam.classList.add('hidden-section'); // AQUI QUE "APAGA" A TELA (Só na fraude real)
+        UI.screens.exam.classList.add('hidden-section');
         UI.modals.fraud.classList.remove('hidden');
         
         sendToWebhook({ acao: "bloquear-aluno", observacoes: reason, redacao: UI.inputs.redacao.value });
     }
 
-    function updateCharCounter(e) {
-        const len = e.target.value.length;
-        UI.feedback.charCounter.textContent = len;
-        UI.feedback.charCounter.style.color = (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) ? '#ef4444' : '#16a34a';
-    }
-
     // ============================================================
-    // ENVIO FINAL
+    // 4. ENVIO FINAL (Onde garante o telefone)
     // ============================================================
     async function handleSubmit(e) {
         e.preventDefault();
         const len = UI.inputs.redacao.value.length;
         
-        // Verifica tamanho (Erro Vermelho)
         if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
+            // Exibe erro de tamanho (Vermelho)
             const modal = UI.modals.error;
-            const icon = modal.querySelector('.icon-circle');
-            const title = modal.querySelector('h2');
-            const text = modal.querySelector('p');
-            const details = modal.querySelector('.error-details');
-            const btn = document.getElementById('closeErrorBtn');
-
-            // Restaura Estilo de Erro (Vermelho)
-            icon.className = 'icon-circle error';
-            icon.innerHTML = '<i class="ph-bold ph-ruler"></i>';
-            title.innerText = "Tamanho Inválido";
-            text.innerText = `Sua redação deve ter entre ${CONFIG.MIN_CHARS} e ${CONFIG.MAX_CHARS} caracteres.`;
-            details.style.display = 'block';
+            modal.querySelector('.icon-circle').className = 'icon-circle error';
+            modal.querySelector('.icon-circle').innerHTML = '<i class="ph-bold ph-ruler"></i>';
+            modal.querySelector('h2').innerText = "Tamanho Inválido";
+            modal.querySelector('p').innerText = `Sua redação deve ter entre ${CONFIG.MIN_CHARS} e ${CONFIG.MAX_CHARS} caracteres.`;
+            modal.querySelector('.error-details').style.display = 'block';
+            document.getElementById('closeErrorBtn').innerText = "Voltar e Corrigir";
             UI.feedback.countError.textContent = len;
-            btn.innerText = "Voltar e Corrigir";
-            
             modal.classList.remove('hidden');
             return;
         }
@@ -278,10 +268,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if(data) { data.status = 'finished'; localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data)); }
 
         try {
-            await sendToWebhook({ acao: "fim-prova", observacoes: "Entregue com sucesso", redacao: UI.inputs.redacao.value });
+            // ENVIA: Telefone, Redação e Ação Fim-Prova
+            await sendToWebhook({ 
+                acao: "fim-prova", 
+                observacoes: "Entregue com sucesso", 
+                redacao: UI.inputs.redacao.value 
+            });
+            
             finishExamSuccess();
         } catch (error) {
-            alert("Erro de conexão. Tire um print da redação e envie no WhatsApp.");
+            alert("Erro de conexão ao enviar. Por favor, tire print e envie no WhatsApp.");
             UI.buttons.submit.disabled = false;
             state.isSubmitting = false;
         }
@@ -295,22 +291,37 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.modals.success.classList.remove('hidden');
     }
 
+    // ============================================================
+    // 5. FUNÇÃO DE ENVIO SEGURA
+    // ============================================================
     async function sendToWebhook(payloadExtra) {
         const stored = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
-        let phoneToSend = stored.phone || ("+55" + UI.inputs.phone.value.replace(/\D/g, ""));
         
-        const payload = { 
-            ...{ nome: stored.name || UI.inputs.name.value, telefone: phoneToSend, curso: stored.course || UI.inputs.course.value, data_evento: new Date().toISOString() }, 
-            ...payloadExtra 
-        };
-        if (payload.redacao) payload.caracteres = payload.redacao.length;
+        // GARANTIA DE TELEFONE: Tenta pegar do storage, senão pega do input
+        let phoneFinal = stored.phone;
+        if (!phoneFinal) {
+            const inputVal = UI.inputs.phone.value.replace(/\D/g, "");
+            if (inputVal.length >= 10) phoneFinal = "+55" + inputVal;
+        }
 
-        console.log("Enviando:", payload);
+        const baseData = {
+            nome: stored.name || UI.inputs.name.value,
+            telefone: phoneFinal, // <--- Aqui garante que o telefone vai
+            curso: stored.course || UI.inputs.course.value,
+            data_evento: new Date().toISOString()
+        };
+
+        const finalPayload = { ...baseData, ...payloadExtra };
+        if (finalPayload.redacao) finalPayload.caracteres = finalPayload.redacao.length;
+
+        console.log("Enviando JSON:", finalPayload);
+
         const response = await fetch(CONFIG.WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(finalPayload)
         });
+
         if (!response.ok) throw new Error(`Status: ${response.status}`);
         return await response.json();
     }
