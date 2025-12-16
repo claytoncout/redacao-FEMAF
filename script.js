@@ -189,10 +189,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. SEGURANÇA (Colar = Aviso / Sair = Bloqueio)
     // ============================================================
     function activateSecurityMonitors() {
+        /*
+        // COMENTADO PARA PERMITIR COPIAR E COLAR
         UI.inputs.redacao.addEventListener('paste', (e) => {
             e.preventDefault();
             showPasteWarning(); // Apenas avisa, não bloqueia
         });
+        */
 
         window.addEventListener('blur', () => {
             const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
