@@ -115,22 +115,17 @@
         </header>
 
         <main class="exam-workspace">
-            
             <form id="contactForm" class="workspace-grid">
-                
                 <aside class="theme-panel">
-                    
                     <div class="panel-card user-card">
                         <div class="card-label">
                             <i class="ph-bold ph-identification-badge"></i> Candidato
                         </div>
-                        
                         <div class="user-data-list">
                             <div class="data-item">
                                 <span class="data-label">Nome</span>
                                 <input type="text" id="sidebarName" class="clean-input" disabled value="...">
                             </div>
-                            
                             <div class="data-item">
                                 <span class="data-label">Curso Selecionado</span>
                                 <input type="text" id="sidebarCourse" class="clean-input" disabled value="...">
@@ -149,9 +144,8 @@
                     <div class="panel-card info-card">
                         <div class="card-label"><i class="ph-bold ph-shield-warning"></i> Regras de Segurança</div>
                         <ul>
-                            <li><strong>Não saia desta tela:</strong> O sistema detecta a troca de abas.</li>
+                            <li><strong>Não saia desta tela:</strong> Se você sair, seu texto será apagado automaticamente.</li>
                             <li><strong>Não cole textos:</strong> A função de colar está desabilitada.</li>
-                            <li>A persistência em burlar as regras bloqueará sua prova automaticamente.</li>
                         </ul>
                     </div>
                 </aside>
@@ -212,10 +206,14 @@
 
         <div id="fraudMessage" class="modal-overlay hidden">
             <div class="modal-card error">
-                <div class="icon-circle error"><i class="ph-bold ph-lock-key"></i></div>
-                <h2>Prova Bloqueada</h2>
-                <p>O sistema detectou uma violação das regras de segurança (saída de tela, recarregamento ou tentativa de cola).</p>
-                <p class="small-text">Sua prova foi encerrada e enviada para análise no estado atual.</p>
+                <div class="icon-circle error"><i class="ph-bold ph-warning-octagon"></i></div>
+                <h2>Atenção!</h2>
+                <p>Você saiu da aba da prova.</p>
+                <p>Por medidas de segurança, <strong>todo o seu texto foi apagado</strong> automaticamente.</p>
+                
+                <button id="restartExamBtn" class="btn-danger" style="margin-top: 10px;">
+                    <i class="ph-bold ph-arrow-counter-clockwise"></i> Reiniciar Prova
+                </button>
             </div>
         </div>
 
