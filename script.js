@@ -5,11 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     const CONFIG = {
         WEBHOOK_URL: "https://n8n-libs-production.up.railway.app/webhook/femaf", 
-        SUPPORT_PHONE: "5511999999999", // 🔴 SEU WHATSAPP
+        SUPPORT_PHONE: "5511999999999", 
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v10' // Versão 10
+        STORAGE_KEY: 'femaf_mvp_session_v11' // Atualizado versão
     };
 
     // ============================================================
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: document.getElementById('introName'),
             phone: document.getElementById('introPhone'),
             course: document.getElementById('introCourse'),
-            modality: document.getElementById('introModality'), // NOVO: Captura modalidade
+            modality: document.getElementById('introModality'),
             redacao: document.getElementById('redacao'),
             hiddenName: document.getElementById('sidebarName'),
             hiddenCourse: document.getElementById('sidebarCourse')
@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons: {
             start: document.getElementById('startExamBtn'),
             submit: document.getElementById('submitBtn'),
-            closeError: document.getElementById('closeErrorBtn')
+            closeError: document.getElementById('closeErrorBtn'),
+            restart: document.getElementById('restartExamBtn') // NOVO BOTÃO
         },
         feedback: {
             loginError: document.getElementById('loginError'),
@@ -63,29 +64,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!raw) return; 
         const data = JSON.parse(raw);
         
-        if (data.status === 'running') {
-            handleFraud("Página recarregada (F5) durante a prova");
-            return; 
-        }
-        if (data.status === 'finished' || data.status === 'blocked') {
+        // Se já finalizou, limpa
+        if (data.status === 'finished') {
             localStorage.removeItem(CONFIG.STORAGE_KEY);
         }
     }
 
     function setupEventListeners() {
-        // Máscara
+        // Máscara Telefone
         UI.inputs.phone.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g,"");
             v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
             e.target.value = v;
         });
 
-        // Botões
+        // Login
         UI.buttons.start.addEventListener('click', handleLogin);
+        
+        // Botão de erro de tamanho (Voltar e editar)
         UI.buttons.closeError.addEventListener('click', (e) => {
             e.preventDefault(); 
             UI.modals.error.classList.add('hidden');
             UI.inputs.redacao.focus(); 
+        });
+
+        // NOVO: Botão de Reiniciar após violação
+        UI.buttons.restart.addEventListener('click', (e) => {
+            e.preventDefault();
+            UI.modals.fraud.classList.add('hidden'); // Esconde modal
+            UI.inputs.redacao.focus(); // Foca no editor (que estará vazio)
         });
 
         // Editor e Envio
@@ -100,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = UI.inputs.name.value.trim();
         const rawPhone = UI.inputs.phone.value.replace(/\D/g, ""); 
         const course = UI.inputs.course.value;
-        const modality = UI.inputs.modality.value; // NOVO
+        const modality = UI.inputs.modality.value; 
 
         if (name.length < 3 || rawPhone.length < 10 || !course || !modality) {
             showLoginError("Preencha todos os campos corretamente.");
@@ -115,13 +122,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const internationalPhone = "+55" + rawPhone; 
 
         try {
-            // Envia login com modalidade
             const response = await sendToWebhook({ 
                 acao: "inicio-prova", 
                 nome: name, 
                 telefone: internationalPhone, 
                 curso: course,
-                modalidade: modality // NOVO
+                modalidade: modality 
             });
 
             if (response && response.autorizado === true) {
@@ -157,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     function startExamSession(name, phone, course, modality) {
         const deadline = Date.now() + (CONFIG.EXAM_DURATION_SEC * 1000);
-        // Adicionado 'modality' ao storage
         const sessionData = { active: true, status: 'running', name, phone, course, modality, deadline };
         localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(sessionData));
         initializeExamInterface(sessionData);
@@ -179,7 +184,13 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(state.timerInterval);
         let timer = seconds;
         state.timerInterval = setInterval(() => {
-            if (timer <= 0) { handleFraud("Tempo esgotado"); return; }
+            if (timer <= 0) { 
+                // Tempo acabou: força envio ou bloqueio
+                alert("Tempo Esgotado!"); 
+                handleSubmit(new Event('submit')); 
+                clearInterval(state.timerInterval);
+                return; 
+            }
             timer--;
             const h = Math.floor(timer / 3600).toString().padStart(2, '0');
             const m = Math.floor((timer % 3600) / 60).toString().padStart(2, '0');
@@ -189,76 +200,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCharCounter(e) {
-        const len = e.target.value.length;
+        const val = e.target ? e.target.value : ""; // Segurança caso chame manualmente
+        const len = val.length;
         UI.feedback.charCounter.textContent = len;
         UI.feedback.charCounter.style.color = (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) ? '#ef4444' : '#16a34a';
     }
 
     // ============================================================
-    // 3. SEGURANÇA (Colar = Aviso / Sair = Bloqueio)
+    // 3. SEGURANÇA (Sair da Aba = Limpar Texto)
     // ============================================================
     function activateSecurityMonitors() {
-        /*
-        // COMENTADO PARA PERMITIR COPIAR E COLAR
-        UI.inputs.redacao.addEventListener('paste', (e) => {
-            e.preventDefault();
-            showPasteWarning(); // Apenas avisa, não bloqueia
-        });
-        */
+        
+        // Desativa clique direito
+        document.addEventListener('contextmenu', event => event.preventDefault());
 
+        // Detecta saída da aba (blur)
         window.addEventListener('blur', () => {
             const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+            // Se está logado E não está enviando o formulário agora
             if (!state.isSubmitting && raw) {
-                handleFraud("Saiu da tela (Aba minimizada)");
+                handleTabViolation();
             }
         });
-        
-        document.addEventListener('contextmenu', event => event.preventDefault());
     }
 
-    function showPasteWarning() {
-        const modal = UI.modals.error;
-        const icon = modal.querySelector('.icon-circle');
+    function handleTabViolation() {
+        // 1. Limpa o texto (Perde tudo)
+        UI.inputs.redacao.value = "";
         
-        // Estilo de Aviso Amarelo
-        icon.className = 'icon-circle warning'; 
-        icon.innerHTML = '<i class="ph-bold ph-hand-palm"></i>'; 
-        modal.querySelector('h2').innerText = "Função Bloqueada";
-        modal.querySelector('p').innerHTML = "Para garantir a integridade da avaliação, <strong>não é permitido colar textos</strong>.<br>Por favor, digite sua redação.";
-        modal.querySelector('.error-details').style.display = 'none';
-        document.getElementById('closeErrorBtn').innerText = "Entendi, vou digitar";
-        
-        modal.classList.remove('hidden');
-    }
+        // 2. Atualiza o contador visualmente para 0
+        updateCharCounter({ target: { value: "" } });
 
-    function handleFraud(reason) {
-        if (state.isSubmitting) return;
-        
-        // Prepara dados de bloqueio
-        const data = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
-        if (data.status === 'blocked') return;
-
-        clearInterval(state.timerInterval);
-        state.isSubmitting = true; 
-        
-        data.status = 'blocked';
-        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data));
-
-        UI.screens.exam.classList.add('hidden-section');
+        // 3. Mostra o modal de aviso/bloqueio temporário
         UI.modals.fraud.classList.remove('hidden');
         
-        sendToWebhook({ acao: "bloquear-aluno", observacoes: reason, redacao: UI.inputs.redacao.value });
+        // Opcional: Você pode enviar um log silencioso para o webhook se quiser monitorar reincidência
+        // sendToWebhook({ acao: "log-violacao-aba", observacoes: "Aluno saiu da aba" });
     }
 
     // ============================================================
-    // 4. ENVIO FINAL (Onde garante o telefone)
+    // 4. ENVIO FINAL
     // ============================================================
     async function handleSubmit(e) {
-        e.preventDefault();
+        if(e) e.preventDefault();
+        
         const len = UI.inputs.redacao.value.length;
         
+        // Validação de Tamanho
         if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
-            // Exibe erro de tamanho (Vermelho)
             const modal = UI.modals.error;
             modal.querySelector('.icon-circle').className = 'icon-circle error';
             modal.querySelector('.icon-circle').innerHTML = '<i class="ph-bold ph-ruler"></i>';
@@ -280,13 +269,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if(data) { data.status = 'finished'; localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data)); }
 
         try {
-            // ENVIA: Telefone, Redação e Ação Fim-Prova
             await sendToWebhook({ 
                 acao: "fim-prova", 
                 observacoes: "Entregue com sucesso", 
                 redacao: UI.inputs.redacao.value 
             });
-            
             finishExamSuccess();
         } catch (error) {
             alert("Erro de conexão ao enviar. Por favor, tire print e envie no WhatsApp.");
@@ -304,12 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // 5. FUNÇÃO DE ENVIO SEGURA
+    // 5. FUNÇÃO DE ENVIO
     // ============================================================
     async function sendToWebhook(payloadExtra) {
         const stored = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
         
-        // GARANTIA DE TELEFONE: Tenta pegar do storage, senão pega do input
         let phoneFinal = stored.phone;
         if (!phoneFinal) {
             const inputVal = UI.inputs.phone.value.replace(/\D/g, "");
@@ -318,9 +304,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const baseData = {
             nome: stored.name || UI.inputs.name.value,
-            telefone: phoneFinal, // <--- Aqui garante que o telefone vai
+            telefone: phoneFinal, 
             curso: stored.course || UI.inputs.course.value,
-            modalidade: stored.modality || UI.inputs.modality.value, // NOVO: Garante envio da modalidade
+            modalidade: stored.modality || UI.inputs.modality.value, 
             data_evento: new Date().toISOString()
         };
 
