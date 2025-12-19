@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v11' // Atualizado versão
+        STORAGE_KEY: 'femaf_mvp_session_v12' // Mudei a versão para resetar testes antigos
     };
 
     // ============================================================
@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
             start: document.getElementById('startExamBtn'),
             submit: document.getElementById('submitBtn'),
             closeError: document.getElementById('closeErrorBtn'),
-            restart: document.getElementById('restartExamBtn') // NOVO BOTÃO
+            restart: document.getElementById('restartExamBtn')
         },
         feedback: {
             loginError: document.getElementById('loginError'),
@@ -57,6 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         checkSession();
         setupEventListeners();
+        
+        // Ativa o monitoramento global (mesmo se recarregar a página e já estiver logado)
+        if (localStorage.getItem(CONFIG.STORAGE_KEY)) {
+            activateSecurityMonitors();
+        }
     }
 
     function checkSession() {
@@ -67,6 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Se já finalizou, limpa
         if (data.status === 'finished') {
             localStorage.removeItem(CONFIG.STORAGE_KEY);
+        } else if (data.status === 'running') {
+            // Se estava rodando e deu F5, restaura a tela
+            initializeExamInterface(data);
         }
     }
 
@@ -88,12 +96,14 @@ document.addEventListener('DOMContentLoaded', () => {
             UI.inputs.redacao.focus(); 
         });
 
-        // NOVO: Botão de Reiniciar após violação
-        UI.buttons.restart.addEventListener('click', (e) => {
-            e.preventDefault();
-            UI.modals.fraud.classList.add('hidden'); // Esconde modal
-            UI.inputs.redacao.focus(); // Foca no editor (que estará vazio)
-        });
+        // Botão de Reiniciar após violação
+        if (UI.buttons.restart) {
+            UI.buttons.restart.addEventListener('click', (e) => {
+                e.preventDefault();
+                UI.modals.fraud.classList.add('hidden'); // Esconde modal
+                UI.inputs.redacao.focus(); // Foca no editor (que estará vazio)
+            });
+        }
 
         // Editor e Envio
         UI.inputs.redacao.addEventListener('input', updateCharCounter);
@@ -177,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.inputs.hiddenCourse.value = data.course;
         
         startTimer((data.deadline - Date.now()) / 1000);
-        activateSecurityMonitors();
+        activateSecurityMonitors(); // Garante que ativou ao iniciar
     }
 
     function startTimer(seconds) {
@@ -185,7 +195,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let timer = seconds;
         state.timerInterval = setInterval(() => {
             if (timer <= 0) { 
-                // Tempo acabou: força envio ou bloqueio
                 alert("Tempo Esgotado!"); 
                 handleSubmit(new Event('submit')); 
                 clearInterval(state.timerInterval);
@@ -200,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCharCounter(e) {
-        const val = e.target ? e.target.value : ""; // Segurança caso chame manualmente
+        const val = e.target ? e.target.value : "";
         const len = val.length;
         UI.feedback.charCounter.textContent = len;
         UI.feedback.charCounter.style.color = (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) ? '#ef4444' : '#16a34a';
@@ -210,32 +219,35 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. SEGURANÇA (Sair da Aba = Limpar Texto)
     // ============================================================
     function activateSecurityMonitors() {
+        // Evita duplicar listeners
+        window.removeEventListener('blur', handleTabViolation);
         
-        // Desativa clique direito
         document.addEventListener('contextmenu', event => event.preventDefault());
 
-        // Detecta saída da aba (blur)
-        window.addEventListener('blur', () => {
-            const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
-            // Se está logado E não está enviando o formulário agora
-            if (!state.isSubmitting && raw) {
-                handleTabViolation();
-            }
-        });
+        window.addEventListener('blur', handleTabViolation);
     }
 
     function handleTabViolation() {
-        // 1. Limpa o texto (Perde tudo)
+        // Verifica se há uma sessão ativa antes de punir
+        const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+        if (!raw) return; // Se não tem prova rodando, não faz nada
+        
+        const data = JSON.parse(raw);
+        if (data.status !== 'running') return;
+
+        // Se o aluno está enviando a prova agora, ignorar o blur
+        if (state.isSubmitting) return;
+
+        console.log("Violação de aba detectada!"); // Para Debug
+
+        // 1. Limpa o texto
         UI.inputs.redacao.value = "";
         
-        // 2. Atualiza o contador visualmente para 0
+        // 2. Atualiza contador
         updateCharCounter({ target: { value: "" } });
 
-        // 3. Mostra o modal de aviso/bloqueio temporário
+        // 3. Mostra modal
         UI.modals.fraud.classList.remove('hidden');
-        
-        // Opcional: Você pode enviar um log silencioso para o webhook se quiser monitorar reincidência
-        // sendToWebhook({ acao: "log-violacao-aba", observacoes: "Aluno saiu da aba" });
     }
 
     // ============================================================
@@ -246,7 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const len = UI.inputs.redacao.value.length;
         
-        // Validação de Tamanho
         if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
             const modal = UI.modals.error;
             modal.querySelector('.icon-circle').className = 'icon-circle error';
@@ -312,8 +323,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const finalPayload = { ...baseData, ...payloadExtra };
         if (finalPayload.redacao) finalPayload.caracteres = finalPayload.redacao.length;
-
-        console.log("Enviando JSON:", finalPayload);
 
         const response = await fetch(CONFIG.WEBHOOK_URL, {
             method: 'POST',
