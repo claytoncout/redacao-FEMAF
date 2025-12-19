@@ -101,7 +101,6 @@
     </div>
 
     <div id="main-exam-container" class="exam-layout hidden-section">
-        
         <header class="app-header">
             <div class="header-left">
                 <div class="logo-mini">FEMAF</div>
@@ -115,22 +114,17 @@
         </header>
 
         <main class="exam-workspace">
-            
             <form id="contactForm" class="workspace-grid">
-                
                 <aside class="theme-panel">
-                    
                     <div class="panel-card user-card">
                         <div class="card-label">
                             <i class="ph-bold ph-identification-badge"></i> Candidato
                         </div>
-                        
                         <div class="user-data-list">
                             <div class="data-item">
                                 <span class="data-label">Nome</span>
                                 <input type="text" id="sidebarName" class="clean-input" disabled value="...">
                             </div>
-                            
                             <div class="data-item">
                                 <span class="data-label">Curso Selecionado</span>
                                 <input type="text" id="sidebarCourse" class="clean-input" disabled value="...">
@@ -149,8 +143,8 @@
                     <div class="panel-card info-card">
                         <div class="card-label"><i class="ph-bold ph-shield-warning"></i> Regras de Segurança</div>
                         <ul>
-                            <li><strong>Não saia desta tela:</strong> O sistema detecta a troca de abas.</li>
-                            <li><strong>Não cole textos:</strong> Se sair da aba, o texto será apagado.</li>
+                            <li><strong>Não saia desta tela:</strong> Se você trocar de aba ou minimizar, seu texto será apagado automaticamente.</li>
+                            <li><strong>Monitoramento Ativo:</strong> O sistema registra suas ações.</li>
                         </ul>
                     </div>
                 </aside>
@@ -184,44 +178,43 @@
                 </section>
             </form>
         </main>
+    </div>
 
-        <div id="successMessage" class="modal-overlay hidden">
-            <div class="modal-card success">
-                <div class="icon-circle success"><i class="ph-bold ph-check"></i></div>
-                <h2>Prova Recebida!</h2>
-                <p>Sua redação foi enviada com sucesso para nossa equipe de correção.</p>
-                <div class="receipt-box">
-                    <div class="row"><span>Protocolo:</span> <strong id="protocolDisplay">...</strong></div>
-                    <div class="row"><span>Data:</span> <strong id="submitDate">--/--/----</strong></div>
-                </div>
+    <div id="successMessage" class="modal-overlay hidden">
+        <div class="modal-card success">
+            <div class="icon-circle success"><i class="ph-bold ph-check"></i></div>
+            <h2>Prova Recebida!</h2>
+            <p>Sua redação foi enviada com sucesso para nossa equipe de correção.</p>
+            <div class="receipt-box">
+                <div class="row"><span>Protocolo:</span> <strong id="protocolDisplay">...</strong></div>
+                <div class="row"><span>Data:</span> <strong id="submitDate">--/--/----</strong></div>
             </div>
         </div>
+    </div>
 
-        <div id="errorMessage" class="modal-overlay hidden">
-            <div class="modal-card error">
-                <div class="icon-circle warning"><i class="ph-bold ph-ruler"></i></div>
-                <h2>Ajuste Necessário</h2>
-                <p>Para garantir uma boa avaliação, seu texto deve ter entre <strong>1000</strong> e <strong>2000</strong> caracteres.</p>
-                <div class="error-details">
-                    Contagem atual: <strong id="currentCharsDisplay">0</strong>
-                </div>
-                <button id="closeErrorBtn" class="btn-danger">Voltar e Editar</button>
+    <div id="errorMessage" class="modal-overlay hidden">
+        <div class="modal-card error">
+            <div class="icon-circle warning"><i class="ph-bold ph-ruler"></i></div>
+            <h2>Ajuste Necessário</h2>
+            <p>Para garantir uma boa avaliação, seu texto deve ter entre <strong>1000</strong> e <strong>2000</strong> caracteres.</p>
+            <div class="error-details">
+                Contagem atual: <strong id="currentCharsDisplay">0</strong>
             </div>
+            <button id="closeErrorBtn" class="btn-danger">Voltar e Editar</button>
         </div>
+    </div>
 
-        <div id="fraudMessage" class="modal-overlay hidden">
-            <div class="modal-card error">
-                <div class="icon-circle error"><i class="ph-bold ph-warning-octagon"></i></div>
-                <h2>Atenção!</h2>
-                <p>Você saiu da aba da prova.</p>
-                <p>Por medidas de segurança, <strong>todo o seu texto foi apagado</strong> automaticamente.</p>
-                
-                <button id="restartExamBtn" class="btn-danger" style="margin-top: 10px;">
-                    <i class="ph-bold ph-arrow-counter-clockwise"></i> Reiniciar Prova
-                </button>
-            </div>
+    <div id="fraudMessage" class="modal-overlay hidden">
+        <div class="modal-card error">
+            <div class="icon-circle error"><i class="ph-bold ph-warning-octagon"></i></div>
+            <h2>Atenção!</h2>
+            <p>Você saiu da aba da prova.</p>
+            <p>Por medidas de segurança, <strong>todo o seu texto foi apagado</strong> automaticamente.</p>
+            
+            <button id="restartExamBtn" class="btn-danger" style="margin-top: 10px;">
+                <i class="ph-bold ph-arrow-counter-clockwise"></i> Entendi, retomar prova
+            </button>
         </div>
-
     </div>
 
     <script src="script.js"></script>
