@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v12' // Mudei a versão para resetar testes antigos
+        STORAGE_KEY: 'femaf_mvp_session_v14' // Versão atualizada
     };
 
     // ============================================================
@@ -49,16 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let state = { timerInterval: null, isSubmitting: false };
 
-    // ============================================================
-    // INICIALIZAÇÃO
-    // ============================================================
     init();
 
     function init() {
         checkSession();
         setupEventListeners();
-        
-        // Ativa o monitoramento global (mesmo se recarregar a página e já estiver logado)
         if (localStorage.getItem(CONFIG.STORAGE_KEY)) {
             activateSecurityMonitors();
         }
@@ -69,11 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!raw) return; 
         const data = JSON.parse(raw);
         
-        // Se já finalizou, limpa
         if (data.status === 'finished') {
             localStorage.removeItem(CONFIG.STORAGE_KEY);
         } else if (data.status === 'running') {
-            // Se estava rodando e deu F5, restaura a tela
             initializeExamInterface(data);
         }
     }
@@ -86,32 +79,31 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.value = v;
         });
 
-        // Login
         UI.buttons.start.addEventListener('click', handleLogin);
         
-        // Botão de erro de tamanho (Voltar e editar)
         UI.buttons.closeError.addEventListener('click', (e) => {
             e.preventDefault(); 
             UI.modals.error.classList.add('hidden');
             UI.inputs.redacao.focus(); 
         });
 
-        // Botão de Reiniciar após violação
+        // Botão do Modal de Fraude (Apenas fecha o modal e limpa)
         if (UI.buttons.restart) {
             UI.buttons.restart.addEventListener('click', (e) => {
                 e.preventDefault();
-                UI.modals.fraud.classList.add('hidden'); // Esconde modal
-                UI.inputs.redacao.focus(); // Foca no editor (que estará vazio)
+                UI.modals.fraud.classList.add('hidden');
+                UI.inputs.redacao.value = ""; // Garante que está limpo
+                UI.inputs.redacao.focus();
+                updateCharCounter({ target: { value: "" } });
             });
         }
 
-        // Editor e Envio
         UI.inputs.redacao.addEventListener('input', updateCharCounter);
         document.getElementById('contactForm').addEventListener('submit', handleSubmit);
     }
 
     // ============================================================
-    // 1. LOGIN
+    // LOGIN
     // ============================================================
     async function handleLogin() {
         const name = UI.inputs.name.value.trim();
@@ -168,9 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.feedback.loginError.classList.remove('hidden');
     }
 
-    // ============================================================
-    // 2. SESSÃO DA PROVA
-    // ============================================================
     function startExamSession(name, phone, course, modality) {
         const deadline = Date.now() + (CONFIG.EXAM_DURATION_SEC * 1000);
         const sessionData = { active: true, status: 'running', name, phone, course, modality, deadline };
@@ -187,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.inputs.hiddenCourse.value = data.course;
         
         startTimer((data.deadline - Date.now()) / 1000);
-        activateSecurityMonitors(); // Garante que ativou ao iniciar
+        activateSecurityMonitors();
     }
 
     function startTimer(seconds) {
@@ -216,42 +205,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // 3. SEGURANÇA (Sair da Aba = Limpar Texto)
+    // SEGURANÇA E VIOLAÇÃO DE ABA
     // ============================================================
     function activateSecurityMonitors() {
-        // Evita duplicar listeners
         window.removeEventListener('blur', handleTabViolation);
-        
         document.addEventListener('contextmenu', event => event.preventDefault());
-
         window.addEventListener('blur', handleTabViolation);
     }
 
     function handleTabViolation() {
-        // Verifica se há uma sessão ativa antes de punir
         const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (!raw) return; // Se não tem prova rodando, não faz nada
-        
+        if (!raw) return;
         const data = JSON.parse(raw);
-        if (data.status !== 'running') return;
+        if (data.status !== 'running' || state.isSubmitting) return;
 
-        // Se o aluno está enviando a prova agora, ignorar o blur
-        if (state.isSubmitting) return;
-
-        console.log("Violação de aba detectada!"); // Para Debug
+        console.log("Violação detectada: Mostrando Modal e Limpando Texto");
 
         // 1. Limpa o texto
         UI.inputs.redacao.value = "";
-        
-        // 2. Atualiza contador
         updateCharCounter({ target: { value: "" } });
 
-        // 3. Mostra modal
+        // 2. Garante que a prova esteja visível (caso algo tenha escondido)
+        UI.screens.exam.classList.remove('hidden-section');
+
+        // 3. Mostra o modal (Removendo a classe hidden)
         UI.modals.fraud.classList.remove('hidden');
+        
+        // OPCIONAL: Envia log silencioso para o webhook
+        sendToWebhook({ acao: "bloquear-aluno", observacoes: "Saiu da tela (Aviso exibido)", redacao: "" });
     }
 
     // ============================================================
-    // 4. ENVIO FINAL
+    // ENVIO FINAL
     // ============================================================
     async function handleSubmit(e) {
         if(e) e.preventDefault();
@@ -287,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             finishExamSuccess();
         } catch (error) {
-            alert("Erro de conexão ao enviar. Por favor, tire print e envie no WhatsApp.");
+            alert("Erro de conexão. Tire print e envie no WhatsApp.");
             UI.buttons.submit.disabled = false;
             state.isSubmitting = false;
         }
@@ -295,24 +280,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function finishExamSuccess() {
         clearInterval(state.timerInterval);
-        UI.screens.exam.classList.add('hidden-section');
+        UI.screens.exam.classList.add('hidden-section'); // Aqui esconde a prova, mas o modal de sucesso está fora, então aparece
         UI.feedback.date.textContent = new Date().toLocaleDateString();
         UI.feedback.protocol.textContent = "FEMAF-" + Math.floor(Math.random()*100000);
         UI.modals.success.classList.remove('hidden');
     }
 
-    // ============================================================
-    // 5. FUNÇÃO DE ENVIO
-    // ============================================================
     async function sendToWebhook(payloadExtra) {
         const stored = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
-        
         let phoneFinal = stored.phone;
         if (!phoneFinal) {
             const inputVal = UI.inputs.phone.value.replace(/\D/g, "");
             if (inputVal.length >= 10) phoneFinal = "+55" + inputVal;
         }
-
         const baseData = {
             nome: stored.name || UI.inputs.name.value,
             telefone: phoneFinal, 
@@ -320,7 +300,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modalidade: stored.modality || UI.inputs.modality.value, 
             data_evento: new Date().toISOString()
         };
-
         const finalPayload = { ...baseData, ...payloadExtra };
         if (finalPayload.redacao) finalPayload.caracteres = finalPayload.redacao.length;
 
@@ -329,7 +308,6 @@ document.addEventListener('DOMContentLoaded', () => {
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(finalPayload)
         });
-
         if (!response.ok) throw new Error(`Status: ${response.status}`);
         return await response.json();
     }
