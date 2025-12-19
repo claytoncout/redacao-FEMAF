@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
             name: document.getElementById('introName'),
             phone: document.getElementById('introPhone'),
             course: document.getElementById('introCourse'),
+            modality: document.getElementById('introModality'), // NOVO: Captura modalidade
             redacao: document.getElementById('redacao'),
             hiddenName: document.getElementById('sidebarName'),
             hiddenCourse: document.getElementById('sidebarCourse')
@@ -99,8 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const name = UI.inputs.name.value.trim();
         const rawPhone = UI.inputs.phone.value.replace(/\D/g, ""); 
         const course = UI.inputs.course.value;
+        const modality = UI.inputs.modality.value; // NOVO
 
-        if (name.length < 3 || rawPhone.length < 10 || !course) {
+        if (name.length < 3 || rawPhone.length < 10 || !course || !modality) {
             showLoginError("Preencha todos os campos corretamente.");
             return;
         }
@@ -113,11 +115,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const internationalPhone = "+55" + rawPhone; 
 
         try {
-            // Envia login
-            const response = await sendToWebhook({ acao: "inicio-prova", nome: name, telefone: internationalPhone, curso: course });
+            // Envia login com modalidade
+            const response = await sendToWebhook({ 
+                acao: "inicio-prova", 
+                nome: name, 
+                telefone: internationalPhone, 
+                curso: course,
+                modalidade: modality // NOVO
+            });
 
             if (response && response.autorizado === true) {
-                startExamSession(name, internationalPhone, course);
+                startExamSession(name, internationalPhone, course, modality);
             } else {
                 showContactSupportError(response.mensagem || "Acesso não autorizado.");
                 resetLoginButton(originalBtnText);
@@ -147,9 +155,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================================
     // 2. SESSÃO DA PROVA
     // ============================================================
-    function startExamSession(name, phone, course) {
+    function startExamSession(name, phone, course, modality) {
         const deadline = Date.now() + (CONFIG.EXAM_DURATION_SEC * 1000);
-        const sessionData = { active: true, status: 'running', name, phone, course, deadline };
+        // Adicionado 'modality' ao storage
+        const sessionData = { active: true, status: 'running', name, phone, course, modality, deadline };
         localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(sessionData));
         initializeExamInterface(sessionData);
     }
@@ -311,6 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             nome: stored.name || UI.inputs.name.value,
             telefone: phoneFinal, // <--- Aqui garante que o telefone vai
             curso: stored.course || UI.inputs.course.value,
+            modalidade: stored.modality || UI.inputs.modality.value, // NOVO: Garante envio da modalidade
             data_evento: new Date().toISOString()
         };
 
