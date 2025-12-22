@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ============================================================
-    // ⚙️ CONFIGURAÇÕES
+    // ⚙️ CONFIGURAÇÕES & DADOS DOS CURSOS
     // ============================================================
     const CONFIG = {
         WEBHOOK_URL: "https://n8n-libs-production.up.railway.app/webhook/femaf", 
@@ -9,7 +9,27 @@ document.addEventListener('DOMContentLoaded', () => {
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v14' // Versão atualizada
+        STORAGE_KEY: 'femaf_mvp_session_v15' // Versão atualizada
+    };
+
+    // Lista de cursos por modalidade
+    const COURSES_DB = {
+        "Presencial": [
+            "Educação Física",
+            "Pedagogia",
+            "Psicologia",
+            "Serviço Social",
+            "Direito",
+            "Farmácia",
+            "Engenharia Civil"
+        ],
+        "EAD": [
+            "Administração",
+            "Ciências Contábeis",
+            "Serviço Social",
+            "Pedagogia",
+            "Tecnólogo em Agronegócios"
+        ]
     };
 
     // ============================================================
@@ -49,6 +69,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let state = { timerInterval: null, isSubmitting: false };
 
+    // ============================================================
+    // INICIALIZAÇÃO
+    // ============================================================
     init();
 
     function init() {
@@ -79,31 +102,61 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.value = v;
         });
 
+        // 🟢 LÓGICA DE FILTRO DE CURSOS 🟢
+        UI.inputs.modality.addEventListener('change', updateCourseOptions);
+
+        // Login
         UI.buttons.start.addEventListener('click', handleLogin);
         
+        // Botões de Modais
         UI.buttons.closeError.addEventListener('click', (e) => {
             e.preventDefault(); 
             UI.modals.error.classList.add('hidden');
             UI.inputs.redacao.focus(); 
         });
 
-        // Botão do Modal de Fraude (Apenas fecha o modal e limpa)
         if (UI.buttons.restart) {
             UI.buttons.restart.addEventListener('click', (e) => {
                 e.preventDefault();
                 UI.modals.fraud.classList.add('hidden');
-                UI.inputs.redacao.value = ""; // Garante que está limpo
+                UI.inputs.redacao.value = ""; 
                 UI.inputs.redacao.focus();
                 updateCharCounter({ target: { value: "" } });
             });
         }
 
+        // Editor e Envio
         UI.inputs.redacao.addEventListener('input', updateCharCounter);
         document.getElementById('contactForm').addEventListener('submit', handleSubmit);
     }
 
+    // Função que atualiza o select de cursos baseado na modalidade
+    function updateCourseOptions() {
+        const selectedModality = UI.inputs.modality.value;
+        const courseSelect = UI.inputs.course;
+        
+        // Limpa opções atuais
+        courseSelect.innerHTML = '<option value="" disabled selected>Selecione o curso...</option>';
+        
+        // Verifica se há cursos para a modalidade selecionada
+        if (COURSES_DB[selectedModality]) {
+            COURSES_DB[selectedModality].forEach(courseName => {
+                const option = document.createElement('option');
+                option.value = courseName;
+                option.textContent = courseName;
+                courseSelect.appendChild(option);
+            });
+            // Habilita o campo
+            courseSelect.disabled = false;
+        } else {
+            // Se não selecionar nada válido, desabilita
+            courseSelect.disabled = true;
+            courseSelect.innerHTML = '<option value="" disabled selected>Selecione a modalidade acima primeiro</option>';
+        }
+    }
+
     // ============================================================
-    // LOGIN
+    // 1. LOGIN
     // ============================================================
     async function handleLogin() {
         const name = UI.inputs.name.value.trim();
@@ -160,6 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.feedback.loginError.classList.remove('hidden');
     }
 
+    // ============================================================
+    // 2. SESSÃO DA PROVA
+    // ============================================================
     function startExamSession(name, phone, course, modality) {
         const deadline = Date.now() + (CONFIG.EXAM_DURATION_SEC * 1000);
         const sessionData = { active: true, status: 'running', name, phone, course, modality, deadline };
@@ -205,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // SEGURANÇA E VIOLAÇÃO DE ABA
+    // 3. SEGURANÇA E VIOLAÇÃO DE ABA
     // ============================================================
     function activateSecurityMonitors() {
         window.removeEventListener('blur', handleTabViolation);
@@ -219,24 +275,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = JSON.parse(raw);
         if (data.status !== 'running' || state.isSubmitting) return;
 
-        console.log("Violação detectada: Mostrando Modal e Limpando Texto");
-
         // 1. Limpa o texto
         UI.inputs.redacao.value = "";
         updateCharCounter({ target: { value: "" } });
 
-        // 2. Garante que a prova esteja visível (caso algo tenha escondido)
+        // 2. Garante que a prova esteja visível
         UI.screens.exam.classList.remove('hidden-section');
 
-        // 3. Mostra o modal (Removendo a classe hidden)
+        // 3. Mostra o modal
         UI.modals.fraud.classList.remove('hidden');
-        
-        // OPCIONAL: Envia log silencioso para o webhook
-        sendToWebhook({ acao: "bloquear-aluno", observacoes: "Saiu da tela (Aviso exibido)", redacao: "" });
     }
 
     // ============================================================
-    // ENVIO FINAL
+    // 4. ENVIO FINAL
     // ============================================================
     async function handleSubmit(e) {
         if(e) e.preventDefault();
@@ -280,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function finishExamSuccess() {
         clearInterval(state.timerInterval);
-        UI.screens.exam.classList.add('hidden-section'); // Aqui esconde a prova, mas o modal de sucesso está fora, então aparece
+        UI.screens.exam.classList.add('hidden-section');
         UI.feedback.date.textContent = new Date().toLocaleDateString();
         UI.feedback.protocol.textContent = "FEMAF-" + Math.floor(Math.random()*100000);
         UI.modals.success.classList.remove('hidden');
