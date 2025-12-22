@@ -27,10 +27,10 @@
             <div class="intro-content">
                 <header class="intro-text">
                     <h1>Ambiente de Avaliação</h1>
-                    <p>Preencha seus dados corretamente para liberar o acesso à prova de redação.</p>
+                    <p id="introDescription">Preencha seus dados para iniciar a prova ou realizar sua inscrição.</p>
                 </header>
 
-                <div class="info-badges">
+                <div id="introBadges" class="info-badges">
                     <div class="badge warning">
                         <i class="ph-bold ph-clock"></i> <span>3 Horas</span>
                     </div>
@@ -40,6 +40,20 @@
                 </div>
 
                 <div class="login-grid">
+                    
+                    <div class="input-group">
+                        <label for="entryMethod">Forma de Ingresso</label>
+                        <div class="input-box">
+                            <i class="ph ph-ticket"></i>
+                            <select id="entryMethod" class="custom-select">
+                                <option value="" disabled selected>Selecione a forma de ingresso...</option>
+                                <option value="prova_online">Prova Online (Redação)</option>
+                                <option value="enem">Nota do ENEM</option>
+                                <option value="transferencia">Transferência Externa</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="input-group">
                         <label for="introName">Nome Completo</label>
                         <div class="input-box">
@@ -77,6 +91,23 @@
                             </select>
                         </div>
                     </div>
+
+                    <div id="enemFields" class="hidden">
+                        <div class="input-group" style="margin-top: 16px;">
+                            <label for="enemYear">Ano de Realização (ENEM)</label>
+                            <div class="input-box">
+                                <i class="ph ph-calendar-blank"></i>
+                                <input type="number" id="enemYear" placeholder="Ex: 2023" min="2010" max="2025">
+                            </div>
+                        </div>
+                        <div class="input-group" style="margin-top: 16px;">
+                            <label for="enemScore">Média Obtida</label>
+                            <div class="input-box">
+                                <i class="ph ph-chart-bar"></i>
+                                <input type="number" id="enemScore" placeholder="Ex: 650.5" step="0.1">
+                            </div>
+                        </div>
+                    </div>
                     
                     <div id="loginError" class="error-toast hidden">
                         <i class="ph-bold ph-warning-circle"></i> Por favor, preencha todos os campos.
@@ -84,7 +115,7 @@
                 </div>
 
                 <button id="startExamBtn" class="btn-primary large">
-                    Iniciar Prova <i class="ph-bold ph-arrow-right"></i>
+                    Iniciar <i class="ph-bold ph-caret-right"></i>
                 </button>
             </div>
         </div>
@@ -173,8 +204,8 @@
     <div id="successMessage" class="modal-overlay hidden">
         <div class="modal-card success">
             <div class="icon-circle success"><i class="ph-bold ph-check"></i></div>
-            <h2>Prova Recebida!</h2>
-            <p>Sua redação foi enviada com sucesso para nossa equipe de correção.</p>
+            <h2 id="successTitle">Prova Recebida!</h2>
+            <p id="successDesc">Sua redação foi enviada com sucesso para nossa equipe de correção.</p>
             <div class="receipt-box">
                 <div class="row"><span>Protocolo:</span> <strong id="protocolDisplay">...</strong></div>
                 <div class="row"><span>Data:</span> <strong id="submitDate">--/--/----</strong></div>
