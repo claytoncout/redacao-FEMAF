@@ -233,8 +233,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (method === 'transferencia') actionType = "cadastro-transferencia";
 
         try {
+            // Mapeamento amigável do tipo de ingresso para enviar ao Webhook
+            let labelIngresso = "Redação Online";
+            if (method === 'enem') labelIngresso = "Nota do ENEM";
+            if (method === 'transferencia') labelIngresso = "Transferência Externa";
+
             const payload = { 
                 acao: actionType, 
+                tipo_ingresso: labelIngresso, // <--- Campo adicionado
                 nome: name, 
                 telefone: internationalPhone, 
                 curso: course,
