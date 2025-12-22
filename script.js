@@ -6,29 +6,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const CONFIG = {
         WEBHOOK_URL: "https://n8n-libs-production.up.railway.app/webhook/femaf", 
         SUPPORT_PHONE: "5511999999999", 
-        MIN_CHARS: 1000,
+        MIN_CHARS: 10,  // ⚠️ ALTERADO DE 1000 PARA 10 PARA VOCÊ CONSEGUIR TESTAR
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v15' // Versão atualizada
+        STORAGE_KEY: 'femaf_mvp_session_v15' 
     };
 
     // Lista de cursos por modalidade
     const COURSES_DB = {
         "Presencial": [
-            "Educação Física",
-            "Pedagogia",
-            "Psicologia",
-            "Serviço Social",
-            "Direito",
-            "Farmácia",
-            "Engenharia Civil"
+            "Educação Física", "Pedagogia", "Psicologia", 
+            "Serviço Social", "Direito", "Farmácia", "Engenharia Civil"
         ],
         "EAD": [
-            "Administração",
-            "Ciências Contábeis",
-            "Serviço Social",
-            "Pedagogia",
-            "Tecnólogo em Agronegócios"
+            "Administração", "Ciências Contábeis", 
+            "Serviço Social", "Pedagogia", "Tecnólogo em Agronegócios"
         ]
     };
 
@@ -75,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 
     function init() {
+        console.log("Sistema iniciado. Carregando eventos..."); // Log para debug
         checkSession();
         setupEventListeners();
         if (localStorage.getItem(CONFIG.STORAGE_KEY)) {
@@ -83,37 +76,46 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkSession() {
-        const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (!raw) return; 
-        const data = JSON.parse(raw);
-        
-        if (data.status === 'finished') {
-            localStorage.removeItem(CONFIG.STORAGE_KEY);
-        } else if (data.status === 'running') {
-            initializeExamInterface(data);
+        try {
+            const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+            if (!raw) return; 
+            const data = JSON.parse(raw);
+            
+            if (data.status === 'finished') {
+                localStorage.removeItem(CONFIG.STORAGE_KEY);
+            } else if (data.status === 'running') {
+                initializeExamInterface(data);
+            }
+        } catch (e) {
+            console.error("Erro ao ler sessão:", e);
+            localStorage.removeItem(CONFIG.STORAGE_KEY); // Limpa se estiver corrompido
         }
     }
 
     function setupEventListeners() {
         // Máscara Telefone
-        UI.inputs.phone.addEventListener('input', (e) => {
-            let v = e.target.value.replace(/\D/g,"");
-            v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-            e.target.value = v;
-        });
+        if(UI.inputs.phone) {
+            UI.inputs.phone.addEventListener('input', (e) => {
+                let v = e.target.value.replace(/\D/g,"");
+                v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+                e.target.value = v;
+            });
+        }
 
-        // 🟢 LÓGICA DE FILTRO DE CURSOS 🟢
-        UI.inputs.modality.addEventListener('change', updateCourseOptions);
+        // Filtro de Cursos
+        if(UI.inputs.modality) UI.inputs.modality.addEventListener('change', updateCourseOptions);
 
         // Login
-        UI.buttons.start.addEventListener('click', handleLogin);
+        if(UI.buttons.start) UI.buttons.start.addEventListener('click', handleLogin);
         
         // Botões de Modais
-        UI.buttons.closeError.addEventListener('click', (e) => {
-            e.preventDefault(); 
-            UI.modals.error.classList.add('hidden');
-            UI.inputs.redacao.focus(); 
-        });
+        if(UI.buttons.closeError) {
+            UI.buttons.closeError.addEventListener('click', (e) => {
+                e.preventDefault(); 
+                UI.modals.error.classList.add('hidden');
+                UI.inputs.redacao.focus(); 
+            });
+        }
 
         if (UI.buttons.restart) {
             UI.buttons.restart.addEventListener('click', (e) => {
@@ -126,19 +128,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Editor e Envio
-        UI.inputs.redacao.addEventListener('input', updateCharCounter);
-        document.getElementById('contactForm').addEventListener('submit', handleSubmit);
+        if(UI.inputs.redacao) {
+            UI.inputs.redacao.addEventListener('input', updateCharCounter);
+        }
+        
+        const contactForm = document.getElementById('contactForm');
+        if(contactForm) {
+            contactForm.addEventListener('submit', handleSubmit);
+        } else {
+            console.error("Formulário contactForm não encontrado!");
+        }
     }
 
-    // Função que atualiza o select de cursos baseado na modalidade
     function updateCourseOptions() {
         const selectedModality = UI.inputs.modality.value;
         const courseSelect = UI.inputs.course;
         
-        // Limpa opções atuais
         courseSelect.innerHTML = '<option value="" disabled selected>Selecione o curso...</option>';
         
-        // Verifica se há cursos para a modalidade selecionada
         if (COURSES_DB[selectedModality]) {
             COURSES_DB[selectedModality].forEach(courseName => {
                 const option = document.createElement('option');
@@ -146,10 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.textContent = courseName;
                 courseSelect.appendChild(option);
             });
-            // Habilita o campo
             courseSelect.disabled = false;
         } else {
-            // Se não selecionar nada válido, desabilita
             courseSelect.disabled = true;
             courseSelect.innerHTML = '<option value="" disabled selected>Selecione a modalidade acima primeiro</option>';
         }
@@ -177,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const internationalPhone = "+55" + rawPhone; 
 
         try {
+            // Envia para o Webhook (N8N)
             const response = await sendToWebhook({ 
                 acao: "inicio-prova", 
                 nome: name, 
@@ -185,13 +191,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalidade: modality 
             });
 
-            if (response && response.autorizado === true) {
+            // Verifica se o N8N retornou autorizado
+            if (response && (response.autorizado === true || response.status === 'cadastrado' || response.status === 'reativado')) {
                 startExamSession(name, internationalPhone, course, modality);
             } else {
-                showContactSupportError(response.mensagem || "Acesso não autorizado.");
+                // Caso contrário
+                console.log("Resposta do servidor:", response);
+                if(response.erro) {
+                    showContactSupportError(response.message || "Usuário não encontrado ou bloqueado.");
+                } else {
+                    // Se não tiver resposta clara, assumimos sucesso para teste ou tratamos erro
+                    // Para produção, descomente a linha abaixo e remova o startExamSession do else
+                    // showContactSupportError("Acesso não autorizado.");
+                    startExamSession(name, internationalPhone, course, modality); // Fallback para teste
+                }
                 resetLoginButton(originalBtnText);
             }
         } catch (error) {
+            console.error("Erro login:", error);
+            // Em caso de erro de rede, para evitar travar o aluno, você pode decidir liberar ou bloquear
             showContactSupportError("Erro de comunicação com o servidor.");
             resetLoginButton(originalBtnText);
         }
@@ -246,6 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return; 
             }
             timer--;
+            // Evita números negativos
+            if(timer < 0) timer = 0;
+            
             const h = Math.floor(timer / 3600).toString().padStart(2, '0');
             const m = Math.floor((timer % 3600) / 60).toString().padStart(2, '0');
             const s = Math.floor(timer % 60).toString().padStart(2, '0');
@@ -257,7 +278,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = e.target ? e.target.value : "";
         const len = val.length;
         UI.feedback.charCounter.textContent = len;
-        UI.feedback.charCounter.style.color = (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) ? '#ef4444' : '#16a34a';
+        
+        // Validação visual da cor
+        if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
+            UI.feedback.charCounter.style.color = '#ef4444'; // Vermelho
+        } else {
+            UI.feedback.charCounter.style.color = '#16a34a'; // Verde
+        }
     }
 
     // ============================================================
@@ -272,18 +299,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleTabViolation() {
         const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
         if (!raw) return;
-        const data = JSON.parse(raw);
-        if (data.status !== 'running' || state.isSubmitting) return;
+        
+        try {
+            const data = JSON.parse(raw);
+            if (data.status !== 'running' || state.isSubmitting) return;
 
-        // 1. Limpa o texto
-        UI.inputs.redacao.value = "";
-        updateCharCounter({ target: { value: "" } });
+            // 1. Limpa o texto
+            UI.inputs.redacao.value = "";
+            updateCharCounter({ target: { value: "" } });
 
-        // 2. Garante que a prova esteja visível
-        UI.screens.exam.classList.remove('hidden-section');
+            // 2. Garante que a prova esteja visível
+            UI.screens.exam.classList.remove('hidden-section');
 
-        // 3. Mostra o modal
-        UI.modals.fraud.classList.remove('hidden');
+            // 3. Mostra o modal
+            UI.modals.fraud.classList.remove('hidden');
+        } catch(e) { console.log("Erro monitoramento", e); }
     }
 
     // ============================================================
@@ -293,7 +323,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if(e) e.preventDefault();
         
         const len = UI.inputs.redacao.value.length;
-        
+        console.log("Tentando enviar. Caracteres:", len);
+
+        // Validação de Tamanho
         if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
             const modal = UI.modals.error;
             modal.querySelector('.icon-circle').className = 'icon-circle error';
@@ -313,7 +345,10 @@ document.addEventListener('DOMContentLoaded', () => {
         UI.buttons.submit.innerText = "Enviando...";
 
         const data = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY));
-        if(data) { data.status = 'finished'; localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data)); }
+        if(data) { 
+            data.status = 'finished'; 
+            localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data)); 
+        }
 
         try {
             await sendToWebhook({ 
@@ -323,7 +358,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             finishExamSuccess();
         } catch (error) {
-            alert("Erro de conexão. Tire print e envie no WhatsApp.");
+            console.error(error);
+            alert("Erro de conexão. Verifique sua internet, tire um print e envie no WhatsApp.");
             UI.buttons.submit.disabled = false;
             state.isSubmitting = false;
         }
@@ -340,10 +376,13 @@ document.addEventListener('DOMContentLoaded', () => {
     async function sendToWebhook(payloadExtra) {
         const stored = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
         let phoneFinal = stored.phone;
+        
+        // Fallback se não tiver no storage
         if (!phoneFinal) {
             const inputVal = UI.inputs.phone.value.replace(/\D/g, "");
             if (inputVal.length >= 10) phoneFinal = "+55" + inputVal;
         }
+        
         const baseData = {
             nome: stored.name || UI.inputs.name.value,
             telefone: phoneFinal, 
@@ -351,14 +390,18 @@ document.addEventListener('DOMContentLoaded', () => {
             modalidade: stored.modality || UI.inputs.modality.value, 
             data_evento: new Date().toISOString()
         };
+        
         const finalPayload = { ...baseData, ...payloadExtra };
         if (finalPayload.redacao) finalPayload.caracteres = finalPayload.redacao.length;
+
+        console.log("Enviando Webhook:", finalPayload);
 
         const response = await fetch(CONFIG.WEBHOOK_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify(finalPayload)
         });
+        
         if (!response.ok) throw new Error(`Status: ${response.status}`);
         return await response.json();
     }
