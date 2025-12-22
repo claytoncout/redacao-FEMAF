@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     
     // ============================================================
-    // ⚙️ CONFIGURAÇÕES & DADOS DOS CURSOS
+    // ⚙️ CONFIGURAÇÕES
     // ============================================================
     const CONFIG = {
         WEBHOOK_URL: "https://n8n-libs-production.up.railway.app/webhook/femaf", 
@@ -9,35 +9,38 @@ document.addEventListener('DOMContentLoaded', () => {
         MIN_CHARS: 1000,
         MAX_CHARS: 2000,
         EXAM_DURATION_SEC: 3 * 60 * 60, 
-        STORAGE_KEY: 'femaf_mvp_session_v15' // Versão atualizada
+        STORAGE_KEY: 'femaf_mvp_session_v17' 
     };
 
-    // Lista de cursos por modalidade
     const COURSES_DB = {
         "Presencial": [
-            "Educação Física",
-            "Pedagogia",
-            "Psicologia",
-            "Serviço Social",
-            "Direito",
-            "Farmácia",
-            "Engenharia Civil"
+            "Educação Física", "Pedagogia", "Psicologia", 
+            "Serviço Social", "Direito", "Farmácia", "Engenharia Civil"
         ],
         "EAD": [
-            "Administração",
-            "Ciências Contábeis",
-            "Serviço Social",
-            "Pedagogia",
-            "Tecnólogo em Agronegócios"
+            "Administração", "Ciências Contábeis", "Serviço Social", 
+            "Pedagogia", "Tecnólogo em Agronegócios"
         ]
     };
 
     // ============================================================
-    // 🖥️ CACHE DE ELEMENTOS
+    // 🖥️ UI ELEMENTS
     // ============================================================
     const UI = {
-        screens: { intro: document.getElementById('intro-overlay'), exam: document.getElementById('main-exam-container') },
+        screens: { 
+            intro: document.getElementById('intro-overlay'), 
+            exam: document.getElementById('main-exam-container') 
+        },
         inputs: {
+            // Novos campos da intro
+            description: document.getElementById('introDescription'), // Texto descritivo
+            badges: document.getElementById('introBadges'),         // Badges de tempo/chars
+            
+            entryMethod: document.getElementById('entryMethod'),
+            enemContainer: document.getElementById('enemFields'),
+            enemYear: document.getElementById('enemYear'),
+            enemScore: document.getElementById('enemScore'),
+            
             name: document.getElementById('introName'),
             phone: document.getElementById('introPhone'),
             course: document.getElementById('introCourse'),
@@ -58,7 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
             timer: document.getElementById('displayTimer'),
             countError: document.getElementById('currentCharsDisplay'),
             protocol: document.getElementById('protocolDisplay'),
-            date: document.getElementById('submitDate')
+            date: document.getElementById('submitDate'),
+            successTitle: document.getElementById('successTitle'),
+            successDesc: document.getElementById('successDesc')
         },
         modals: {
             success: document.getElementById('successMessage'),
@@ -70,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let state = { timerInterval: null, isSubmitting: false };
 
     // ============================================================
-    // INICIALIZAÇÃO
+    // INIT
     // ============================================================
     init();
 
@@ -95,20 +100,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setupEventListeners() {
-        // Máscara Telefone
         UI.inputs.phone.addEventListener('input', (e) => {
             let v = e.target.value.replace(/\D/g,"");
             v = v.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
             e.target.value = v;
         });
 
-        // 🟢 LÓGICA DE FILTRO DE CURSOS 🟢
         UI.inputs.modality.addEventListener('change', updateCourseOptions);
+        UI.inputs.entryMethod.addEventListener('change', updateEntryMethodUI);
 
-        // Login
         UI.buttons.start.addEventListener('click', handleLogin);
         
-        // Botões de Modais
         UI.buttons.closeError.addEventListener('click', (e) => {
             e.preventDefault(); 
             UI.modals.error.classList.add('hidden');
@@ -125,20 +127,50 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Editor e Envio
         UI.inputs.redacao.addEventListener('input', updateCharCounter);
         document.getElementById('contactForm').addEventListener('submit', handleSubmit);
     }
 
-    // Função que atualiza o select de cursos baseado na modalidade
+    // 🟢 FUNÇÃO UI DINÂMICA
+    function updateEntryMethodUI() {
+        const method = UI.inputs.entryMethod.value;
+        const btn = UI.buttons.start;
+        const desc = UI.inputs.description;
+        const badges = UI.inputs.badges;
+
+        // Reset inicial (garantia)
+        UI.inputs.enemContainer.classList.add('hidden');
+        badges.classList.add('hidden'); // Começa oculto por padrão na troca
+        
+        switch (method) {
+            case 'prova_online':
+                desc.textContent = "Preencha seus dados para iniciar a prova de redação agora.";
+                badges.classList.remove('hidden'); // Mostra os badges só na prova
+                btn.innerHTML = 'Iniciar Prova <i class="ph-bold ph-arrow-right"></i>';
+                break;
+
+            case 'enem':
+                desc.textContent = "Informe sua nota e ano de realização para analisarmos sua aprovação imediata.";
+                UI.inputs.enemContainer.classList.remove('hidden'); // Mostra campos do ENEM
+                btn.innerHTML = 'Enviar Inscrição <i class="ph-bold ph-paper-plane-right"></i>';
+                break;
+
+            case 'transferencia':
+                desc.textContent = "Preencha os dados abaixo para darmos andamento ao seu processo de transferência.";
+                btn.innerHTML = 'Solicitar Transferência <i class="ph-bold ph-paper-plane-right"></i>';
+                break;
+                
+            default:
+                desc.textContent = "Selecione uma forma de ingresso para continuar.";
+                break;
+        }
+    }
+
     function updateCourseOptions() {
         const selectedModality = UI.inputs.modality.value;
         const courseSelect = UI.inputs.course;
-        
-        // Limpa opções atuais
         courseSelect.innerHTML = '<option value="" disabled selected>Selecione o curso...</option>';
         
-        // Verifica se há cursos para a modalidade selecionada
         if (COURSES_DB[selectedModality]) {
             COURSES_DB[selectedModality].forEach(courseName => {
                 const option = document.createElement('option');
@@ -146,52 +178,85 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.textContent = courseName;
                 courseSelect.appendChild(option);
             });
-            // Habilita o campo
             courseSelect.disabled = false;
         } else {
-            // Se não selecionar nada válido, desabilita
             courseSelect.disabled = true;
             courseSelect.innerHTML = '<option value="" disabled selected>Selecione a modalidade acima primeiro</option>';
         }
     }
 
     // ============================================================
-    // 1. LOGIN
+    // 1. LÓGICA DE CADASTRO / LOGIN
     // ============================================================
     async function handleLogin() {
         const name = UI.inputs.name.value.trim();
         const rawPhone = UI.inputs.phone.value.replace(/\D/g, ""); 
         const course = UI.inputs.course.value;
         const modality = UI.inputs.modality.value; 
+        const method = UI.inputs.entryMethod.value;
 
-        if (name.length < 3 || rawPhone.length < 10 || !course || !modality) {
-            showLoginError("Preencha todos os campos corretamente.");
+        // 🛑 VALIDAÇÃO 1
+        if (!method) {
+            showLoginError("Por favor, selecione a Forma de Ingresso.");
+            UI.inputs.entryMethod.focus();
             return;
         }
 
+        // 🛑 VALIDAÇÃO 2
+        if (name.length < 3 || rawPhone.length < 10 || !course || !modality) {
+            showLoginError("Preencha todos os campos pessoais e de curso.");
+            return;
+        }
+
+        // 🛑 VALIDAÇÃO 3 (ENEM)
+        let enemData = {};
+        if (method === 'enem') {
+            const year = UI.inputs.enemYear.value;
+            const score = UI.inputs.enemScore.value;
+            if (!year || !score) {
+                showLoginError("Informe o ano e a nota do ENEM.");
+                return;
+            }
+            enemData = { enem_ano: year, enem_nota: score };
+        }
+
+        // UI Loading
         const originalBtnText = UI.buttons.start.innerHTML;
         UI.buttons.start.disabled = true;
-        UI.buttons.start.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Verificando...';
+        UI.buttons.start.innerHTML = '<i class="ph-bold ph-spinner ph-spin"></i> Processando...';
         UI.feedback.loginError.classList.add('hidden');
 
         const internationalPhone = "+55" + rawPhone; 
+        
+        let actionType = "inicio-prova";
+        if (method === 'enem') actionType = "cadastro-enem";
+        if (method === 'transferencia') actionType = "cadastro-transferencia";
 
         try {
-            const response = await sendToWebhook({ 
-                acao: "inicio-prova", 
+            const payload = { 
+                acao: actionType, 
                 nome: name, 
                 telefone: internationalPhone, 
                 curso: course,
-                modalidade: modality 
-            });
+                modalidade: modality,
+                ...enemData
+            };
 
-            if (response && response.autorizado === true) {
-                startExamSession(name, internationalPhone, course, modality);
+            const response = await sendToWebhook(payload);
+
+            if (method === 'prova_online') {
+                if (response && response.autorizado === true) {
+                    startExamSession(name, internationalPhone, course, modality);
+                } else {
+                    showContactSupportError(response.mensagem || "Acesso não autorizado.");
+                    resetLoginButton(originalBtnText);
+                }
             } else {
-                showContactSupportError(response.mensagem || "Acesso não autorizado.");
-                resetLoginButton(originalBtnText);
+                finishRegistrationSuccess();
             }
+
         } catch (error) {
+            console.error(error);
             showContactSupportError("Erro de comunicação com o servidor.");
             resetLoginButton(originalBtnText);
         }
@@ -246,9 +311,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 return; 
             }
             timer--;
-            const h = Math.floor(timer / 3600).toString().padStart(2, '0');
-            const m = Math.floor((timer % 3600) / 60).toString().padStart(2, '0');
-            const s = Math.floor(timer % 60).toString().padStart(2, '0');
+            const safeTimer = timer < 0 ? 0 : timer;
+            const h = Math.floor(safeTimer / 3600).toString().padStart(2, '0');
+            const m = Math.floor((safeTimer % 3600) / 60).toString().padStart(2, '0');
+            const s = Math.floor(safeTimer % 60).toString().padStart(2, '0');
             UI.feedback.timer.textContent = `${h}:${m}:${s}`;
         }, 1000);
     }
@@ -261,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ============================================================
-    // 3. SEGURANÇA E VIOLAÇÃO DE ABA
+    // 3. SEGURANÇA E SUBMIT
     // ============================================================
     function activateSecurityMonitors() {
         window.removeEventListener('blur', handleTabViolation);
@@ -275,35 +341,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = JSON.parse(raw);
         if (data.status !== 'running' || state.isSubmitting) return;
 
-        // 1. Limpa o texto
         UI.inputs.redacao.value = "";
         updateCharCounter({ target: { value: "" } });
-
-        // 2. Garante que a prova esteja visível
         UI.screens.exam.classList.remove('hidden-section');
-
-        // 3. Mostra o modal
         UI.modals.fraud.classList.remove('hidden');
     }
 
-    // ============================================================
-    // 4. ENVIO FINAL
-    // ============================================================
     async function handleSubmit(e) {
         if(e) e.preventDefault();
         
         const len = UI.inputs.redacao.value.length;
         
         if (len < CONFIG.MIN_CHARS || len > CONFIG.MAX_CHARS) {
-            const modal = UI.modals.error;
-            modal.querySelector('.icon-circle').className = 'icon-circle error';
-            modal.querySelector('.icon-circle').innerHTML = '<i class="ph-bold ph-ruler"></i>';
-            modal.querySelector('h2').innerText = "Tamanho Inválido";
-            modal.querySelector('p').innerText = `Sua redação deve ter entre ${CONFIG.MIN_CHARS} e ${CONFIG.MAX_CHARS} caracteres.`;
-            modal.querySelector('.error-details').style.display = 'block';
-            document.getElementById('closeErrorBtn').innerText = "Voltar e Corrigir";
+            UI.modals.error.classList.remove('hidden');
             UI.feedback.countError.textContent = len;
-            modal.classList.remove('hidden');
             return;
         }
 
@@ -329,21 +380,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // ============================================================
+    // 4. SUCESSO
+    // ============================================================
+    
     function finishExamSuccess() {
         clearInterval(state.timerInterval);
         UI.screens.exam.classList.add('hidden-section');
+        UI.feedback.successTitle.textContent = "Prova Recebida!";
+        UI.feedback.successDesc.textContent = "Sua redação foi enviada com sucesso para nossa equipe de correção.";
         UI.feedback.date.textContent = new Date().toLocaleDateString();
         UI.feedback.protocol.textContent = "FEMAF-" + Math.floor(Math.random()*100000);
+        UI.modals.success.classList.remove('hidden');
+    }
+
+    function finishRegistrationSuccess() {
+        UI.feedback.successTitle.textContent = "Cadastro Realizado!";
+        UI.feedback.successDesc.innerHTML = "Recebemos suas informações com sucesso.<br>Nossa equipe entrará em contato em breve pelo WhatsApp.";
+        UI.feedback.date.textContent = new Date().toLocaleDateString();
+        UI.feedback.protocol.textContent = "REQ-" + Math.floor(Math.random()*100000);
         UI.modals.success.classList.remove('hidden');
     }
 
     async function sendToWebhook(payloadExtra) {
         const stored = JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || {};
         let phoneFinal = stored.phone;
+        
         if (!phoneFinal) {
             const inputVal = UI.inputs.phone.value.replace(/\D/g, "");
             if (inputVal.length >= 10) phoneFinal = "+55" + inputVal;
         }
+        
         const baseData = {
             nome: stored.name || UI.inputs.name.value,
             telefone: phoneFinal, 
@@ -351,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modalidade: stored.modality || UI.inputs.modality.value, 
             data_evento: new Date().toISOString()
         };
+        
         const finalPayload = { ...baseData, ...payloadExtra };
         if (finalPayload.redacao) finalPayload.caracteres = finalPayload.redacao.length;
 
