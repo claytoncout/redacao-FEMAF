@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Processo Seletivo Online</title>
+    <title>Vestibular Online | FEMAF</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,33 +57,23 @@
                     </div>
 
                     <div class="input-group">
-                        <label for="introCourse">Curso Desejado</label>
+                        <label for="introModality">Modalidade</label>
                         <div class="input-box">
-                            <i class="ph ph-books"></i>
-                            <select id="introCourse" class="custom-select">
-                                <option value="" disabled selected>Selecione uma opção...</option>
-                                <option value="Administração">Administração</option>
-                                <option value="Ciências Contábeis">Ciências Contábeis</option>
-                                <option value="Direito">Direito</option>
-                                <option value="Educação Física">Educação Física</option>
-                                <option value="Engenharia Civil">Engenharia Civil</option>
-                                <option value="Farmácia">Farmácia</option>
-                                <option value="Pedagogia">Pedagogia</option>
-                                <option value="Psicologia">Psicologia</option>
-                                <option value="Serviço Social">Serviço Social</option>
-                                <option value="Tecnólogo em Agronegócios">Tecnólogo em Agronegócios</option>
+                            <i class="ph ph-map-pin"></i>
+                            <select id="introModality" class="custom-select">
+                                <option value="" disabled selected>Selecione a modalidade...</option>
+                                <option value="Presencial">Presencial</option>
+                                <option value="EAD">EAD (Online)</option>
                             </select>
                         </div>
                     </div>
 
                     <div class="input-group">
-                        <label for="introModality">Modalidade</label>
+                        <label for="introCourse">Curso Desejado</label>
                         <div class="input-box">
-                            <i class="ph ph-map-pin"></i>
-                            <select id="introModality" class="custom-select">
-                                <option value="" disabled selected>Selecione...</option>
-                                <option value="Presencial">Presencial</option>
-                                <option value="EAD">EAD (Online)</option>
+                            <i class="ph ph-books"></i>
+                            <select id="introCourse" class="custom-select" disabled>
+                                <option value="" disabled selected>Selecione a modalidade acima primeiro</option>
                             </select>
                         </div>
                     </div>
@@ -220,4 +210,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
